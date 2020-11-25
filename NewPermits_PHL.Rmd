@@ -126,8 +126,7 @@ grid.arrange(ncol=2,
 ggplot() + 
   geom_sf(data = boundary) +
   geom_sf(data = permits, colour="red", size=0.1, show.legend = "point") +
-  labs(title= "Permits, Phil - 2010-2020") +
-  mapTheme(title_size = 14),
+  labs(title= "Permits, Phil - 2010-2020"),
 ggplot() + 
   geom_sf(data = boundary, fill = "grey40") +
   stat_density2d(data = data.frame(st_coordinates(permits)), 
@@ -136,7 +135,7 @@ ggplot() +
   scale_fill_viridis() +
   scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
   labs(title = "Density of Permits") +
-  mapTheme(title_size = 14) + theme(legend.position = "none"))
+  theme(legend.position = "none"))
 
 #Fishnet code
 fishnet <- 
@@ -190,26 +189,6 @@ Census data:
   - Education level - change in education level
   - Household size
   - Household type (non family increase)
-
-### Grocery Stores
-Grocery Stores (for 2018 only, data do not seem to be available on date that grocery stores were built): from Philadelphia Neighborhood Food Retail Website (https://www.opendataphilly.org/dataset/neighborhood-food-retail)
-Provides availability of high-produce supply stores vs. low-produce supply stores.
-metadata: https://metadata.phila.gov/#home/datasetdetails/568d4b3c13d1bebc0c2a2b0f/representationdetails/5d4c6e160f63a20011c21727/
-
-No Access areas have 0 high-produce supply stores within walking distance (half mile). Low Access areas have either 1 big box store, 1 produce store, or up to 4 limited-access high-produce supply stores. Moderate or High Access and have either 1 or more supermarkets or several high-produce supply stores nearby.
-```{r}
-food_retail<- st_read("http://data-phl.opendata.arcgis.com/datasets/53b8a1c653a74c92b2de23a5d7bf04a0_0.geojson")
-food_retail$HPSS_ACCESS <- factor(food_retail$HPSS_ACCESS, levels = c("Moderate or High Access", "Low Access", "No Access", "NA"))
-ggplot()+
-  geom_sf(data=food_retail, aes(fill=HPSS_ACCESS))+
-  scale_fill_brewer(palette = 'YlOrRd')+
-  labs(fill="Level of Access",
-        title="Access to High Produce Supply Stores, 2018",
-        caption="Census Block Groups categorized by Moderate or High Access, 
-       \nLow Access, and No Access to High Produce Supply Stores") +
-  mapTheme()
-```
-
 
 ### 311 requests 
 https://www.opendataphilly.org/dataset/311-service-and-information-requests
@@ -356,8 +335,8 @@ final_net <-
 
 final_net <-
   st_centroid(final_net) %>% #take the centroid of the fishnet
-    st_join(dplyr::select(neighborhoods, name), by = "uniqueID") %>% #spatially join those withinthe nhood polygons nd polict districs. ie assign the neighborhood to the fishnet id for whichever nhood the fishnet centroid falls into
-    st_join(dplyr::select(policeDistricts, District), by = "uniqueID") %>%
+    st_join(dplyr::select(nhood, name), by = "uniqueID") %>% #spatially join those withinthe nhood polygons nd polict districs. ie assign the neighborhood to the fishnet id for whichever nhood the fishnet centroid falls into
+    #st_join(dplyr::select(policeDistricts, District), by = "uniqueID") %>%
       st_drop_geometry() %>%
       left_join(dplyr::select(final_net, geometry, uniqueID)) %>%  #get the fishnet back in to get the polygons. drop the geom to do the left join and then being it back in
       st_sf() %>%
