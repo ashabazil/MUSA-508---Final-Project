@@ -79,17 +79,59 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r read in data}
+#permits <- 
+  #st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+permits&filename=permits&format=geojson&skipfields=cartodb_id")
+
+
+#permits <- 
+#st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+permits+WHERE+permitissuedate+>=+'2010-01-01'+AND+permitissuedate+<+'2020-02-01'AND+typeofwork+=+'NEW+CONSTRUCTION'&filename=permits&format=geojson&skipfields=cartodb_id")
+
 permits <- 
-  st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+permits&filename=permits&format=geojson&skipfields=cartodb_id")
-
-
-permits <- 
-st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+permits+WHERE+permitissuedate+>=+'2010-01-01'+AND+permitissuedate+<+'2020-02-01'AND+typeofwork+=+'NEW+CONSTRUCTION'&filename=permits&format=geojson&skipfields=cartodb_id")
-
+st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+permits+WHERE+permitissuedate+>=+'2010-01-01'+AND+permitissuedate+<+'2020-02-01'AND+permitdescription+=+'RESIDENTIAL+BUILDING+PERMIT'&filename=permits&format=geojson&skipfields=cartodb_id")%>%
+  st_transform('ESRI:102729')
 
 mapview(permits)
 
 ```
+
+```{r}
+#Philadelphia Boundary
+
+boundary<-st_read("http://data.phl.opendata.arcgis.com/datasets/405ec3da942d4e20869d4e1449a2be48_0.geojson")%>%
+  st_transform('ESRI:102729')
+
+mapview(boundary)
+```
+
+```{r}
+#Fishnet code
+fishnet <- 
+  st_make_grid(boundary,
+               cellsize = 50, 
+               square = TRUE) %>%
+  .[boundary] %>%
+  st_sf() %>%
+  mutate(uniqueID = rownames(.))
+
+mapview(fishnet)
+
+permit_net <- 
+  dplyr::select(permits) %>% #an SF point object
+  mutate(countpermits = 1) %>% #giving value of one to each point
+  aggregate(., fishnet, sum) %>% #aggregate points. period represents burglaries. sum number of "1" points that fall within each grid cell. aggregate is a type of spatial join. normally would do a join and them summarize, but this does both in one step. 
+  mutate(counpermit = replace_na(countpermits, 0), #where there weren't any crimes
+         uniqueID = rownames(.),#make into a column
+         cvID = sample(round(nrow(fishnet) / 24), 
+                       size=nrow(fishnet), replace = TRUE)) #adding a random number to each grid cell for cross validation later
+
+ggplot() +
+  geom_sf(data = permit_net, aes(fill = countpermits), color = NA) +
+  scale_fill_viridis() +
+  labs(title = "Count of Permits for the fishnet") +
+  mapTheme()
+
+```
+
 
 
 
@@ -192,4 +234,12 @@ variables=c(Median_HHInc="B19013_001",
             male_bach="B15001_009E")
 
 #Need to decide what years and call the census data
+
+Phila_18 <- get_acs(geography = "tract",
+                          state = 42,
+                          county= 101,
+                          variables = variables,
+                          year = 2018,
+                          survey = "acs5",
+                          geometry=T)
 ```
