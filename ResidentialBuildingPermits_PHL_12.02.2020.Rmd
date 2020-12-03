@@ -757,7 +757,7 @@ permit_risk_sf <-
 #   #scale_y_continuous(limits = c(0,100)) +
 #   plotTheme()
 
-#permit_risk_sf_nh_risk <-
+permit_risk_sf_nh_risk <-
   permit_risk_sf %>%
   dplyr::select(cvID, Risk_Category, countpermits) %>%
   dplyr::filter(., Risk_Category =="90% to 100%") %>%
