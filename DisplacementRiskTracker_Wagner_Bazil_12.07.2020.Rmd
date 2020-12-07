@@ -1,0 +1,821 @@
+---
+title: "Residential Building Permits"
+author: "Asha Bazil, Hanna Wagner"
+date: "11/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggcorrplot)
+library(tidyverse)
+library(sf)
+library(RSocrata)
+library(viridis)
+library(spatstat)
+library(raster)
+library(spdep)
+library(FNN)
+library(grid)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(tidycensus)
+library(mapview)
+library(RColorBrewer)
+library(remotes)
+#install_github("yonghah/esri2sf")
+#library(esri2sf)
+
+root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+```
+
+
+```{r Themes, message=FALSE, warning=FALSE}
+
+mapTheme <- function(base_size = 12) {
+  theme(
+    text = element_text( color = "black"),
+    plot.title = element_text(size = 13,colour = "black"),
+    plot.subtitle=element_text(face="italic"),
+    plot.caption=element_text(hjust=0),
+    axis.ticks = element_blank(),
+    panel.background = element_blank(),axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=2)
+  )
+}
+
+plotTheme <- function(base_size = 12) {
+  theme(
+    text = element_text( color = "black"),
+    plot.title = element_text(size = 14,colour = "black"),
+    plot.subtitle = element_text(face="italic"),
+    plot.caption = element_text(hjust=0),
+    axis.ticks = element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major = element_line("grey80", size = 0.1),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=2),
+    strip.background = element_rect(fill = "lightskyblue1", color = "white"),
+    strip.text = element_text(size=12),
+    axis.title = element_text(size=12),
+    axis.text = element_text(size=10),
+    plot.background = element_blank(),
+    legend.background = element_blank(),
+    legend.title = element_text(colour = "black", face = "italic"),
+    legend.text = element_text(colour = "black", face = "italic"),
+    strip.text.x = element_text(size = 14)
+  )
+}
+
+palette5 <- c("#25CB10", "#5AB60C", "#8FA108",   "#C48C04", "#FA7800")
+```
+
+## Intro
+
+Motivate the analysis – “What is the use case; why would someone want to replicate your analysis and why would they use this approach?”
+
+
+## Data
+
+Describe the data you used
+
+Here we gather Philadelphia residential building permit data from 2015 through 2019. 
+
+### Base data
+
+```{r read in base data}
+#residential building permit
+
+permits <- 
+  st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+permits+WHERE+permitissuedate+>=+'2015-01-01'+AND+permitissuedate+<+'2019-12-31'AND+permitdescription+=+'RESIDENTIAL+BUILDING+PERMIT'&filename=permits&format=geojson&skipfields=cartodb_id") %>% 
+    st_transform('ESRI:102729') 
+
+# ggplot() +
+#   geom_sf(data = permits)
+
+#mapview(permits)
+
+boundary<-
+st_read("http://data.phl.opendata.arcgis.com/datasets/405ec3da942d4e20869d4e1449a2be48_0.geojson") %>%
+st_transform('ESRI:102729') %>%
+st_union()
+
+# ggplot() + 
+#   geom_sf(data = boundary)
+
+
+```
+
+
+```{r fishnet}
+
+# create the fishnet
+
+# uses grid.arrange to organize independent plots
+grid.arrange(ncol=2,
+ggplot() + 
+  geom_sf(data = boundary) +
+  geom_sf(data = permits, colour="red", size=0.1, show.legend = "point") +
+  labs(title= "Permits, Phil - 2010-2020"),
+ggplot() + 
+  geom_sf(data = boundary, fill = "grey40") +
+  stat_density2d(data = data.frame(st_coordinates(permits)), 
+                 aes(X, Y, fill = ..level.., alpha = ..level..),
+                 size = 0.01, bins = 40, geom = 'polygon') +
+  scale_fill_viridis() +
+  scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
+  labs(title = "Density of Permits") +
+  theme(legend.position = "none"))
+
+#Fishnet code
+fishnet <- 
+  st_make_grid(boundary,
+               cellsize = 500, 
+               square = TRUE) %>%
+  .[boundary] %>%
+  st_sf() %>%
+  mutate(uniqueID = rownames(.))
+
+permit_net <- 
+  dplyr::select(permits) %>% #an SF point object
+  mutate(countpermits = 1) %>% #giving value of one to each point
+  aggregate(., fishnet, sum) %>% #aggregate points. period represents burglaries. sum number of "1" points that fall within each grid cell. aggregate is a type of spatial join. normally would do a join and them summarize, but this does both in one step. 
+  mutate(countpermits = replace_na(countpermits, 0), #where there weren't any crimes
+         uniqueID = rownames(.),#make into a column
+         cvID = sample(round(nrow(fishnet) / 24), 
+                       size=nrow(fishnet), replace = TRUE)) #adding a random number to each grid cell for cross validation later
+
+ggplot() +
+  geom_sf(data = permit_net, aes(fill = countpermits), color = NA) +
+  scale_fill_viridis() +
+  labs(title = "Count of Permits for the fishnet") +
+  mapTheme()
+
+```
+
+```{r nhood data}
+
+nhood <- st_read("/Users/ashabazil/Documents/GitHub/geo-data/Neighborhoods_Philadelphia/Neighborhoods_Philadelphia.geojson") %>%
+st_transform(st_crs(fishnet)) 
+
+ggplot()+
+  geom_sf(data=nhood)+
+  mapTheme()
+```
+
+### 311 and Census Data
+
+```{r 311 data}
+#https://cityofphiladelphia.github.io/carto-api-explorer/#public_cases_fc
+
+# Sanitation Data
+sanitation<-
+  st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+public_cases_fc+WHERE+service_name+=+'Sanitation+/+Dumpster+Violation'OR+service_name+=+'Illegal+Dumping'+AND+requested_datetime+>=+'2015-01-01'+AND+requested_datetime+<+'2019-12-31'&filename=sanitation&format=geojson&skipfields=cartodb_id") %>%
+    mutate(year = substr(requested_datetime,1,4)) %>% 
+    #filter(year %in% c("2020")) %>%
+    dplyr::select(Y = lat, X = lon) %>%
+    na.omit() %>%
+    st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
+    st_transform(st_crs(fishnet)) %>%
+    mutate(Legend = "Sanitation")
+
+# ggplot() +
+#   geom_sf(data = sanitation)
+
+# Service Data
+service<-
+  st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+public_cases_fc+WHERE+service_name+=+'Building+Dangerous'+AND+requested_datetime+>=+'2015-01-01'+AND+requested_datetime+<+'2019-12-31'&filename=sanitation&format=geojson&skipfields=cartodb_id") %>%
+    mutate(year = substr(requested_datetime,1,4)) %>% 
+    dplyr::select(Y = lat, X = lon) %>%
+    na.omit() %>%
+    st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
+    st_transform(st_crs(fishnet)) %>%
+    mutate(Legend = "Service")
+
+# Vacant Lot Data
+vacant<-
+  st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+public_cases_fc+WHERE+service_name+=+'Vacant+House+or+Commercial'+AND+requested_datetime+>=+'2015-01-01'+AND+requested_datetime+<+'2019-12-31'&filename=sanitation&format=geojson&skipfields=cartodb_id") %>%
+    mutate(year = substr(requested_datetime,1,4)) %>% 
+    dplyr::select(Y = lat, X = lon) %>%
+    na.omit() %>%
+    st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
+    st_transform(st_crs(fishnet)) %>%
+    mutate(Legend = "Vacant")
+
+
+
+```
+
+
+```{r}
+## Census Data (The 2019 5-year ACS data have not yet been released so I went with 2018 5-year ACS (2014-2018))
+
+census_api_key("337be6633f769979b1dfc56e5071279d780c2090", overwrite = TRUE)
+
+dd18_5 <- load_variables(year = 2018, dataset = "acs5", cache = TRUE)
+
+variables=c(Median_HHInc="B19013_001",
+            VotingAgePop="B29002_001", #CITIZEN, VOTING-AGE POPULATION BY EDUCATIONAL ATTAINMENT: TOTAL
+            HS_LessThan9Grade="B29002_002", #CITIZEN, VOTING-AGE POPULATION BY EDUCATIONAL ATTAINMENT: Less than 9th grade
+            HS_9to12Grade="B29002_003", #CITIZEN, VOTING-AGE POPULATION BY EDUCATIONAL ATTAINMENT: 9th to 12th grade, no diploma
+            HS="B29002_004", #CITIZEN, VOTING-AGE POPULATION BY EDUCATIONAL ATTAINMENT: High school graduate (includes equivalency)
+            SomeCollege="B29002_005", #CITIZEN, VOTING-AGE POPULATION BY EDUCATIONAL ATTAINMENT: Some college, no degree
+            Associate="B29002_006", #CITIZEN, VOTING-AGE POPULATION BY EDUCATIONAL ATTAINMENT: Associate's degree
+            Bach="B29002_007", #CITIZEN, VOTING-AGE POPULATION BY EDUCATIONAL ATTAINMENT: Bachelor's degree
+            GradProf="B29002_008", #CITIZEN, VOTING-AGE POPULATION BY EDUCATIONAL ATTAINMENT: Graduate or professional degree
+            Pop_occHousing="B25026_001", #Total population in occupied housing units
+            Pop_OwnOcc="B25026_002", #Total population in occupied housing units!!Owner occupied
+            Pop_Own2017later="B25026_003", #Total population in occupied housing units!!Owner occupied!!Moved in 2017 or later
+            Pop_Own2015to2016="B25026_004", #Total population in occupied housing units!!Owner occupied!!Moved in 2015 to 2016
+            Pop_Own2010to2014="B25026_005", #Total population in occupied housing units!!Owner occupied!!Moved in 2010 to 2014
+            Pop_Own2000to2009="B25026_006", #Total population in occupied housing units!!Owner occupied!!Moved in 2000 to 2009
+            Pop_Own1990to1999="B25026_007", #Total population in occupied housing units!!Owner occupied!!Moved in 1990 to 1999
+            Pop_Own1989earlier="B25026_008", #Total population in occupied housing units!!Owner occupied!!Moved in 1989 or earlier
+            Pop_RentOcc="B25026_009", #Total population in occupied housing units!!Renter occupied
+            Pop_Rent2017later="B25026_010", #Total population in occupied housing units!!Renter occupied!!Moved in 2017 or later
+            Pop_Rent2015to2016="B25026_011", #Total population in occupied housing units!!Renter occupied!!Moved in 2015 to 2016
+            Pop_Rent2010to2014="B25026_012", #Total population in occupied housing units!!Renter occupied!!Moved in 2010 to 2014
+            Pop_Rent2000to2009="B25026_013", #Total population in occupied housing units!!Renter occupied!!Moved in 2000 to 2009
+            Pop_Rent1990to1999="B25026_014", #Total population in occupied housing units!!Renter occupied!!Moved in 1990 to 1999
+            Pop_Rent1989earlier="B25026_015") #Total population in occupied housing units!!Renter occupied!!Moved in 1989 or earlier
+
+ACS_2018 <- get_acs(geography = "tract",
+                           state = 42,
+                           county= 101,
+                           variables = variables,
+                           year = 2018,
+                           geometry=T)%>%
+  st_transform('ESRI:102729')  %>% 
+  dplyr::select(variable, estimate, GEOID) %>%
+  spread(variable, estimate) %>%
+  mutate(percent_NoHS= (HS_LessThan9Grade+HS_9to12Grade) / VotingAgePop,
+         percent_HS= HS/ VotingAgePop,
+         percent_SomeCollege= SomeCollege / VotingAgePop,
+         percent_assoc = Associate / VotingAgePop,
+         percent_bach = Bach / VotingAgePop,
+         percent_GradProf = GradProf / VotingAgePop,
+         percent_ownOcc= Pop_OwnOcc / Pop_occHousing,
+         percent_rentOcc = Pop_RentOcc / Pop_occHousing,
+         percent_Own_Pre2010 = (Pop_Own1989earlier + Pop_Own1990to1999 + Pop_Own2000to2009) / Pop_occHousing,
+         percent_Own_2010to2014 = Pop_Own2010to2014 / Pop_occHousing,
+         percent_Own_2015to2018 = (Pop_Own2015to2016 + Pop_Own2017later) / Pop_occHousing,
+         percent_Rent_Pre2010 = (Pop_Rent1989earlier + Pop_Rent1990to1999 + Pop_Rent2000to2009) / Pop_occHousing,
+         percent_Rent_2010to2014 = Pop_Rent2010to2014 / Pop_occHousing,
+         percent_Rent_2015to2018 = (Pop_Rent2015to2016 + Pop_Rent2017later) / Pop_occHousing)%>%
+ dplyr::select(Median_HHInc, percent_NoHS, percent_HS, percent_SomeCollege, percent_assoc, percent_bach, percent_GradProf, 
+         percent_ownOcc, percent_rentOcc, percent_Own_Pre2010, percent_Own_2010to2014, percent_Own_2015to2018, 
+         percent_Rent_Pre2010, percent_Rent_2010to2014,   percent_Rent_2015to2018)
+```
+
+we should add in some summary stats and exploratory analyses of the variables across space. 
+Describe your exploratory analysis using maps and plots
+
+### Data Wrangling 
+Aggregating features to our fishnet
+
+```{r Putting variables into fishnet, message=FALSE, warning=FALSE, include=TRUE}
+
+#put other data into fishnet. 
+
+vars_net <- 
+  rbind(sanitation, service, vacant)  %>%
+  st_join(., fishnet, join=st_within) %>% #if point is within this polygon, assign the polygon id to this point. then get it into the unit of grid polygons
+  st_drop_geometry() %>%
+  group_by(uniqueID, Legend) %>% #group by unique id and the type of variable, in this case just one cars
+  summarize(count = n()) %>% #counting each point per grid cell
+  full_join(fishnet, by = "uniqueID") %>%
+  spread(Legend, count, fill=0) %>%
+  st_sf() %>%
+  dplyr::select(-`<NA>`) %>%
+  na.omit() %>%
+  ungroup()
+
+```
+
+```{r Add census data to fishnet}
+vars_net<-
+  vars_net%>%
+  st_centroid()%>%
+  st_join(ACS_2018)%>%
+  na.omit()
+
+```
+
+
+## Spatial processes
+
+### Nearest Neighbor Prediction Factors by Fishnet
+
+point features turned into nearest neighrbor
+
+```{r Creating iterative list, message=FALSE, warning=FALSE, include=TRUE}
+
+vars_net.long <- 
+  gather(vars_net, Variable, value, -geometry, -uniqueID)
+
+vars <- unique(vars_net.long$Variable)
+mapList <- list()
+
+for(i in vars){
+  mapList[[i]] <- 
+    ggplot() +
+      geom_sf(data = filter(vars_net.long, Variable == i), aes(fill=value), colour=NA) +
+      scale_fill_viridis(name="") +
+      labs(title=i) +
+      mapTheme()}
+
+#do.call(grid.arrange,c(mapList, ncol =9, top = "Prediction Factors by Fishnet"))
+
+nn_function <- function(measureFrom,measureTo,k) {
+  measureFrom_Matrix <-
+    as.matrix(measureFrom)
+  measureTo_Matrix <-
+    as.matrix(measureTo)
+  nn <-   
+    get.knnx(measureTo, measureFrom, k)$nn.dist
+    output <-
+      as.data.frame(nn) %>%
+      rownames_to_column(var = "thisPoint") %>%
+      gather(points, point_distance, V1:ncol(.)) %>%
+      arrange(as.numeric(thisPoint)) %>%
+      group_by(thisPoint) %>%
+      summarize(pointDistance = mean(point_distance)) %>%
+      arrange(as.numeric(thisPoint)) %>% 
+      dplyr::select(-thisPoint) %>%
+      pull()
+  
+  return(output)  
+}
+
+
+```
+
+
+```{r NN function for predictors, message=FALSE, warning=FALSE, include=TRUE}
+st_c <- st_coordinates
+st_coid <- st_centroid
+
+vars_net <-
+  vars_net %>%
+    mutate(
+      Sanitation.nn =
+        nn_function(st_c(st_coid(vars_net)), st_c(sanitation),3),
+      Service.nn =
+        nn_function(st_c(st_coid(vars_net)), st_c(service),3),
+      Vacant.nn =
+        nn_function(st_c(st_coid(vars_net)), st_c(vacant),3))
+
+```
+
+```{r vars net for nn features, message=FALSE, warning=FALSE, include=TRUE}
+## Visualize the NN feature
+vars_net.long.nn <- 
+  dplyr::select(vars_net, ends_with(".nn")) %>%
+    gather(Variable, value, -geometry)
+
+vars <- unique(vars_net.long.nn$Variable)
+mapList <- list()
+
+for(i in vars){
+  mapList[[i]] <- 
+    ggplot() +
+      geom_sf(data = filter(vars_net.long.nn, Variable == i), aes(fill=value), colour=NA) +
+      scale_fill_viridis(name="") +
+      labs(title=i) +
+      mapTheme()}
+
+#o.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor Prediction Factors by Fishnet", fontsize=2))
+
+```
+
+### Creating Distance to Center City as a variable
+```{r Measuring distance to one point, message=FALSE, warning=FALSE, include=TRUE}
+ccPoint <-
+  filter(nhood, name == "CENTER_CITY") %>%
+  st_centroid()
+
+vars_net$ccDistance =
+  st_distance(st_centroid(vars_net),ccPoint) %>%
+  as.numeric() 
+```
+
+### Create final net
+
+```{r doing spatial join, message=FALSE, warning=FALSE, include=TRUE}
+## important to drop the geometry from joining features
+final_net <-
+  left_join(permit_net, st_drop_geometry(vars_net), by="uniqueID") 
+
+```
+
+
+```{r creating final fish net, message=FALSE, warning=FALSE, include=TRUE}
+#polygon to polygon joins are hard. 
+
+final_net <-
+  st_centroid(final_net) %>% #take the centroid of the fishnet
+    st_join(dplyr::select(nhood, name), by = "uniqueID") %>% #spatially join those withinthe nhood polygons nd polict districs. ie assign the neighborhood to the fishnet id for whichever nhood the fishnet centroid falls into
+    #st_join(dplyr::select(policeDistricts, District), by = "uniqueID") %>%
+      st_drop_geometry() %>%
+      left_join(dplyr::select(final_net, geometry, uniqueID)) %>%  #get the fishnet back in to get the polygons. drop the geom to do the left join and then being it back in
+      st_sf() %>%
+  na.omit()
+
+# for live demo
+# mapview::mapview(final_net, zcol = "District")
+
+```
+
+
+## Modeling Approach
+
+Describe modeling approach
+
+### Correlation Plots
+
+```{r correlation tests, fig.height=15, fig.width=15, message=FALSE, warning=FALSE, include=TRUE}
+correlation.long <-
+  st_drop_geometry(final_net) %>%
+    dplyr::select(-uniqueID, -cvID, -name,-ccDistance) %>%
+    gather(Variable, Value, -countpermits)
+
+correlation.cor <-
+  correlation.long %>%
+    group_by(Variable) %>%
+    summarize(correlation = cor(Value, countpermits, use = "complete.obs"))
+    
+ggplot(correlation.long, aes(Value, countpermits)) +
+  geom_point(size = 0.1) +
+  geom_text(data = correlation.cor, aes(label = paste("r =", round(correlation, 2))),
+            x=-Inf, y=Inf) +
+  geom_smooth(method = "lm", se = FALSE, colour = "black") +
+  facet_wrap(~Variable, ncol = 2, scales = "free") +
+  labs(title = "Permit count as a function of risk factors") +
+  plotTheme()
+
+
+
+regVars <- 
+  #final_net %>%
+  select_if(st_drop_geometry(final_net), is.numeric) %>%
+  dplyr::select(.,-Sanitation, -Vacant, -Service, -cvID, -percent_assoc,-percent_Own_2010to2014, -percent_Rent_2010to2014, -percent_NoHS, -percent_SomeCollege,-permit.isSig, -percent_GradProf, -percent_rentOcc) %>%
+  na.omit()
+
+ggcorrplot(
+  round(cor(regVars), 1), 
+  p.mat = cor_pmat(regVars),
+  colors = c("#25CB10", "white", "#FA7800"),
+  type="lower",
+  insig = "blank") +  
+    labs(title = "Correlation across numeric variables")
+
+# colNameTbl <-
+# colnames(regVars)
+# 
+# write.csv(colNameTbl,"tablenames\\tablenames.csv", row.names = FALSE)
+
+
+```
+
+
+### Plots of Local Moran's I for fishnet grid cells
+
+```{r Spatial process of theft, message=FALSE, warning=FALSE, include=TRUE}
+## generates warnings from PROJ issues
+## {spdep} to make polygon to neighborhoods... 
+final_net.nb <- poly2nb(as_Spatial(final_net), queen=TRUE) #polygons into neighborhood which gives us list of weights for which neighbors it has. creting a netowkr graph of one grid to all others.
+## ... and neighborhoods to list of weigths
+final_net.weights <- nb2listw(final_net.nb, style="W", zero.policy=TRUE)
+```
+
+```{r local Morans I, message=FALSE, warning=FALSE, include=TRUE}
+final_net.localMorans <- 
+  cbind(
+    as.data.frame(localmoran(final_net$countpermits, final_net.weights)),
+    as.data.frame(final_net)) %>% 
+    st_sf() %>%
+      dplyr::select(Permit_Count = countpermits, 
+                    Local_Morans_I = Ii, 
+                    P_Value = `Pr(z > 0)`) %>%
+      mutate(Significant_Hotspots = ifelse(P_Value <= 0.001, 1, 0)) %>%
+      gather(Variable, Value, -geometry)
+  
+vars <- unique(final_net.localMorans$Variable)
+varList <- list()
+
+for(i in vars){
+  varList[[i]] <- 
+    ggplot() +
+      geom_sf(data = filter(final_net.localMorans, Variable == i), 
+              aes(fill = Value), colour=NA) +
+      scale_fill_viridis(name="") +
+      labs(title=i) +
+      mapTheme() + theme(legend.position="bottom")}
+
+do.call(grid.arrange,c(varList, ncol = 4, top = "Local Morans I statistics, Permit"))
+```
+
+### Distance to Hot spot
+
+```{r calc distance to hot spot, message=FALSE, warning=FALSE, include=TRUE}
+# generates warning from NN
+# final_net <- final_net %>% 
+#   mutate(abandoned.isSig = 
+#            ifelse(local_morans[,5] <= 0.001, 1, 0)) %>% #how close each grid cell is to a sig hotspot
+#   mutate(abandoned.isSig.dist = 
+#            nn_function(st_c(st_coid(final_net)),
+#                        st_c(st_coid(filter(final_net, abandoned.isSig == 1))),
+#                        k = 1))
+
+final_net <-
+  final_net %>% 
+  mutate(permit.isSig = 
+           ifelse(localmoran(final_net$countpermits, 
+                             final_net.weights)[,5] <= 0.0000001, 1, 0)) %>% #does this need to changed?
+  mutate(permit.isSig.dist = 
+           nn_function(st_coordinates(st_centroid(final_net)),
+                       st_coordinates(st_centroid(
+                         filter(final_net, permit.isSig == 1))), 1))
+
+ggplot() +
+      geom_sf(data = final_net, aes(fill=permit.isSig.dist), colour=NA) +
+      scale_fill_viridis(name="NN Distance") +
+      labs(title="Permit NN Distance") +
+      mapTheme()
+
+## What does k = 1 represent? the distance to my closest significant hot spot. Want the biggest number when we're close to a hot spot. Exposure to closest one.  Can we plot this?
+```
+### Linear regression
+
+We create two sets of independent variables -- one using the count variables and one using the nearest neighbor variables, including our newly created variables for distance to a significant theft hot spot. 
+
+```{r PR, message=FALSE, warning=FALSE, include=TRUE}
+
+reg.vars <- c("Sanitation.nn", "Service.nn", "Vacant.nn","ccDistance", "Median_HHInc", "percent_HS", "percent_bach","percent_ownOcc", "percent_Own_Pre2010", "percent_Own_2015to2018","percent_Rent_Pre2010", "percent_Rent_2015to2018")
+
+reg.ss.vars <- c("Sanitation.nn", "Service.nn", "Vacant.nn","ccDistance", "Median_HHInc", "percent_HS", "percent_bach","percent_ownOcc", "percent_Own_Pre2010", "percent_Own_2015to2018","percent_Rent_Pre2010", "percent_Rent_2015to2018","permit.isSig", "permit.isSig.dist")
+```
+
+
+```{r Crossvalidation and histogram of theft, message=FALSE, warning=FALSE, include=TRUE}
+crossValidate <- function(dataset, id, dependentVariable, indVariables) {
+
+allPredictions <- data.frame()
+cvID_list <- unique(dataset[[id]])
+
+for (i in cvID_list) {
+
+  thisFold <- i
+  cat("This hold out fold is", thisFold, "\n")
+
+  fold.train <- filter(dataset, dataset[[id]] != thisFold) %>% as.data.frame() %>% 
+                dplyr::select(id, geometry, indVariables, dependentVariable)
+  fold.test  <- filter(dataset, dataset[[id]] == thisFold) %>% as.data.frame() %>% 
+                dplyr::select(id, geometry, indVariables, dependentVariable)
+  
+  regression <-
+    glm(countpermits ~ ., family = "poisson",
+      data = fold.train %>% 
+      dplyr::select(-geometry, -id))
+  
+  thisPrediction <- 
+    mutate(fold.test, Prediction = predict(regression, fold.test, type = "response"))
+    
+  allPredictions <-
+    rbind(allPredictions, thisPrediction)
+    
+  }
+  return(st_sf(allPredictions))
+}
+
+#hist(final_net$countpermits, breaks=5, xlim=c(0,5))
+
+# final_net %>% 
+# ggplot(aes(x = countpermits)) +
+#     geom_density(fill="#1f2a59", color="#e9ecef") +
+#     scale_x_continuous(limits = c(0,10))+
+#     scale_y_continuous(limits = c(0,2)) +
+#   labs(x = "Count of permits across grid cells", y = "Responses",
+#          title = "Percentage Change in Monthly Income, January 2019 and 2020") +
+#     plotTheme() + theme(legend.position = "bottom", axis.text.x = element_text(size = 8))
+
+
+
+# fn_group<-
+# final_net %>% 
+#   mutate(countpermits = case_when(countpermits = 0 ~ "0", 
+#                                   countpermits >= 1 | countpermits <5 ~ "1-5",
+#                                   countpermits >= 5 | countpermits <=10 ~ "5-10",
+#                                   TRUE ~ countpermits),
+#  countpermits = factor(countpermits, levels = c("0", "1-5",
+#                                                     "5-10"))) %>%
+#   group_by(countpermits) %>% 
+#   summarise(count = n()) %>% 
+#   mutate(pct = round((count/sum(count)) * 100,2)) %>% 
+#   ggplot() + 
+#     geom_bar(aes(moved_past3Yr, pct), fill = "#1f2a59", stat = "identity") +
+#     labs(x = "", y = "Percent",
+#          title = "Number of times moved in the past 3 years") +
+#     scale_y_continuous(limits = c(0,100)) +
+#     plotTheme()
+
+```
+
+In this histogram we see that in most of the grid cells, the count of thefts is 0-1. This provides justification for using the Poisson regression model which is more suited this kind of data distribution. 
+
+## Cross validation methods
+
+We cross validate four different regressions. Two perform random k-fold cross validation - one using the simple risk factors and one adding the distance to significant hotspots variable. Two others perform LOGO-CV based on the neighborhood name - again,- one using the simple risk factors and one adding the distance to significant hotspots variable.
+
+```{r CV on four regressions, message=FALSE, warning=FALSE, include=TRUE, results=FALSE}
+reg.cv <- crossValidate(
+  dataset = final_net,
+  id = "cvID",
+  dependentVariable = "countpermits",
+  indVariables = reg.vars) %>%
+    dplyr::select(cvID = cvID, countpermits, Prediction, geometry)
+
+reg.ss.cv <- crossValidate(
+  dataset = final_net,
+  id = "cvID",
+  dependentVariable = "countpermits",
+  indVariables = reg.ss.vars) %>%
+    dplyr::select(cvID = cvID, countpermits, Prediction, geometry)
+
+reg.spatialCV <- crossValidate(
+  dataset = final_net,
+  id = "name",
+  dependentVariable = "countpermits",
+  indVariables = reg.vars) %>%
+    dplyr::select(cvID = name, countpermits, Prediction, geometry)
+
+reg.ss.spatialCV <- crossValidate(
+  dataset = final_net,
+  id = "name",
+  dependentVariable = "countpermits",
+  indVariables = reg.ss.vars) %>%
+    dplyr::select(cvID = name, countpermits, Prediction, geometry)
+```
+
+```{r calc errors of 4 regressions, message=FALSE, warning=FALSE, include=TRUE}
+reg.summary <- 
+  rbind(
+    mutate(reg.cv,           Error = Prediction - countpermits,
+                             Regression = "Random k-fold CV: Just Risk Factors"),
+                             
+    mutate(reg.ss.cv,        Error = Prediction - countpermits,
+                             Regression = "Random k-fold CV: Spatial Process"),
+    
+    mutate(reg.spatialCV,    Error = Prediction - countpermits,
+                             Regression = "Spatial LOGO-CV: Just Risk Factors"),
+                             
+    mutate(reg.ss.spatialCV, Error = Prediction - countpermits,
+                             Regression = "Spatial LOGO-CV: Spatial Process")) %>%
+    st_sf() 
+
+```
+
+```{r plot errors, message=FALSE, warning=FALSE, include=TRUE}
+error_by_reg_and_fold <- 
+  reg.summary %>%
+    group_by(Regression, cvID) %>% 
+    summarize(Mean_Error = mean(Prediction - countpermits, na.rm = T),
+              MAE = mean(abs(Mean_Error), na.rm = T),
+              SD_MAE = mean(abs(Mean_Error), na.rm = T)) %>%
+  ungroup()
+
+error_by_reg_and_fold %>%
+  ggplot(aes(MAE)) + 
+    geom_histogram(bins = 30, colour="black", fill = "#FDE725FF") +
+    facet_wrap(~Regression) +  
+    geom_vline(xintercept = 0) + scale_x_continuous(breaks = seq(0, 8, by = 1)) + 
+    labs(title="Distribution of MAE", subtitle = "k-fold cross validation vs. LOGO-CV",
+         x="Mean Absolute Error", y="Count") 
+```
+
+
+```{r permit error magnitude, message=FALSE, warning=FALSE, include=TRUE}
+error_by_reg_and_fold %>%
+  filter(str_detect(Regression, "LOGO")) %>%
+  ggplot() +
+    geom_sf(aes(fill = MAE)) +
+    facet_wrap(~Regression) +
+    scale_fill_viridis() +
+    labs(title = "Permit errors by LOGO-CV Regression") +
+    mapTheme() + theme(legend.position="bottom")
+
+```
+
+
+```{r mae table, message=FALSE, warning=FALSE, include=TRUE}
+st_drop_geometry(error_by_reg_and_fold) %>%
+  group_by(Regression) %>% 
+    summarize(Mean_MAE = round(mean(MAE), 2),
+              SD_MAE = round(sd(MAE), 2)) %>%
+  kable(caption = "MAE by regression") %>%
+    kable_styling("striped", full_width = F) %>%
+    row_spec(2, color = "black", background = "#FDE725FF") %>%
+    row_spec(4, color = "black", background = "#FDE725FF") 
+
+mean(final_net$countpermits)
+```
+
+```{r pred v obs, message=FALSE, warning=FALSE, include=TRUE}
+st_drop_geometry(reg.summary) %>%
+  group_by(Regression) %>%
+    mutate(Permit_Decile = ntile(countpermits, 10)) %>%
+  group_by(Regression, Permit_Decile) %>%
+    summarize(meanObserved = mean(countpermits, na.rm=T),
+              meanPrediction = mean(Prediction, na.rm=T)) %>%
+    gather(Variable, Value, -Regression, -Permit_Decile) %>%          
+    ggplot(aes(Permit_Decile, Value, shape = Variable)) +
+      geom_point(size = 2) + geom_path(aes(group = Permit_Decile), colour = "black") +
+      scale_shape_manual(values = c(2, 17)) +
+      facet_wrap(~Regression) + xlim(0,10) +
+      labs(title = "Predicted and observed permit by observed permit decile")
+
+```
+
+## Risk Map and Results
+
+Provide additional maps and data visualizations to show that your model is usefu
+
+```{r for risk prediction, message=FALSE, warning=FALSE, include=TRUE}
+permit_risk_sf <-
+  filter(reg.summary, Regression == "Spatial LOGO-CV: Spatial Process") %>%
+  mutate(label = "Risk Predictions",
+         Risk_Category = ntile(Prediction, 100),
+         Risk_Category = case_when(
+           Risk_Category >= 90 ~ "90% to 100%",
+           Risk_Category >= 70 & Risk_Category <= 89 ~ "70% to 89%",
+           Risk_Category >= 50 & Risk_Category <= 69 ~ "50% to 69%",
+           Risk_Category >= 30 & Risk_Category <= 49 ~ "30% to 49%",
+           Risk_Category >= 1 & Risk_Category <= 29 ~ "1% to 29%")) 
+# %>%
+#   cbind(
+#     aggregate(
+#       dplyr::select(theft18) %>% mutate(theftCount = 1), ., sum) %>%
+#       mutate(theftCount = replace_na(theftCount, 0))) %>%
+#   dplyr::select(label,Risk_Category, theftCount)
+
+# permit_risk_sf_nh_count <-
+#   permit_risk_sf %>%
+#   dplyr::select(cvID, countpermits, Risk_Category) %>%
+#   st_drop_geometry() %>%
+#   group_by(cvID) %>%
+#   summarise(Predicted_Permits=sum(countpermits)) %>%
+#   dplyr::filter(., Predicted_Permits>180) %>%
+#   arrange(.,-Predicted_Permits) %>%
+#   rename(Neighborhood = cvID) %>%
+#   ggplot() +
+#   geom_bar(aes(x=reorder(Neighborhood, -Predicted_Permits), Predicted_Permits), fill = "#1f2a59", stat = "identity") +
+#   labs(x = "Neighborhood",
+#        title = "Top 10 Neighborhoods by Predicted Permits") +
+#   #scale_y_continuous(limits = c(0,100)) +
+#   plotTheme()
+
+permit_risk_sf_nh_risk <-
+  permit_risk_sf %>%
+  dplyr::select(cvID, Risk_Category, countpermits) %>%
+  dplyr::filter(., Risk_Category =="90% to 100%") %>%
+  st_drop_geometry() %>%
+  group_by(cvID) %>%
+  summarise(Predicted_Permits=sum(countpermits)) %>%
+  dplyr::filter(., Predicted_Permits>150) %>%
+  arrange(.,-Predicted_Permits) %>%
+  rename(Neighborhood = cvID) %>%
+  ggplot() +
+  geom_bar(aes(x=reorder(Neighborhood, -Predicted_Permits), Predicted_Permits), fill = "#1f2a59", stat = "identity") +
+  labs(x = "Neighborhood",
+       title = "Neighborhoods with Predicted Permit Risk between 90-100%") +
+  #scale_y_continuous(limits = c(0,100)) +
+  plotTheme()
+
+
+
+```
+
+
+```{r Risk category,message=FALSE, warning=FALSE, include=TRUE}
+permit_risk_sf %>%
+  na.omit() %>%
+  gather(Variable, Value, -label, -Risk_Category, -geometry) %>%
+  ggplot() +
+    geom_sf(aes(fill = Risk_Category), colour = NA) +
+    geom_sf(data=nhood, fill = "transparent") +
+    #geom_sf(data = sample_n(cvID, 300), size = .5, colour = "black") +
+    #facet_wrap(~label, ) +
+    scale_fill_viridis(discrete = TRUE) +
+    labs(title="Risk Predictions",
+         subtitle="Residential Permit Predictions") +
+    mapTheme()
+```
+
+## How the Analysis meets the use case and what we could do to make the analysis better
