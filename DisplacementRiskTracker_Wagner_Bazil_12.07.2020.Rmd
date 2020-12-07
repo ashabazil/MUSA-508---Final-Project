@@ -1,6 +1,6 @@
 ---
 title: "Residential Building Permits"
-author: "Asha Bazil, Hanna Wagner"
+author: "Asha Bazil, Hannah Wagner"
 date: "11/19/2020"
 output: html_document
 ---
@@ -25,8 +25,6 @@ library(tidycensus)
 library(mapview)
 library(RColorBrewer)
 library(remotes)
-#install_github("yonghah/esri2sf")
-#library(esri2sf)
 
 root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
@@ -122,7 +120,8 @@ grid.arrange(ncol=2,
 ggplot() + 
   geom_sf(data = boundary) +
   geom_sf(data = permits, colour="red", size=0.1, show.legend = "point") +
-  labs(title= "Permits, Phil - 2010-2020"),
+  labs(title= "Permits, Phil - 2010-2020")+
+  mapTheme(),
 ggplot() + 
   geom_sf(data = boundary, fill = "grey40") +
   stat_density2d(data = data.frame(st_coordinates(permits)), 
@@ -131,7 +130,8 @@ ggplot() +
   scale_fill_viridis() +
   scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
   labs(title = "Density of Permits") +
-  theme(legend.position = "none"))
+  theme(legend.position = "none")+
+  mapTheme())
 
 #Fishnet code
 fishnet <- 
@@ -160,13 +160,13 @@ ggplot() +
 ```
 
 ```{r nhood data}
-
 nhood <- st_read("/Users/ashabazil/Documents/GitHub/geo-data/Neighborhoods_Philadelphia/Neighborhoods_Philadelphia.geojson") %>%
 st_transform(st_crs(fishnet)) 
 
-ggplot()+
-  geom_sf(data=nhood)+
-  mapTheme()
+
+#ggplot()+
+  #geom_sf(data=nhood)+
+  #mapTheme()
 ```
 
 ### 311 and Census Data
@@ -185,9 +185,6 @@ sanitation<-
     st_transform(st_crs(fishnet)) %>%
     mutate(Legend = "Sanitation")
 
-ggplot() +
-  geom_sf(data = sanitation)
-
 # Service Data
 service<-
   st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+public_cases_fc+WHERE+service_name+=+'Building+Dangerous'+AND+requested_datetime+>=+'2015-01-01'+AND+requested_datetime+<+'2019-12-31'&filename=sanitation&format=geojson&skipfields=cartodb_id") %>%
@@ -198,8 +195,6 @@ service<-
     st_transform(st_crs(fishnet)) %>%
     mutate(Legend = "Service")
 
-ggplot() +
-  geom_sf(data = service)
 
 # Vacant Lot Data
 vacant<-
@@ -211,9 +206,23 @@ vacant<-
     st_transform(st_crs(fishnet)) %>%
     mutate(Legend = "Vacant")
 
-ggplot() +
-  geom_sf(data = vacant)
-
+#Plot of all the point data - a little cluttered so maybe we just want to skip this
+grid.arrange(ncol=3,
+  ggplot()+
+    geom_sf(data=boundary)+
+    geom_sf(data=sanitation)+
+    labs(title="Locations of Sanitation Violations")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=boundary)+
+    geom_sf(data=service)+
+    labs(title="Location of Service Requests")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=boundary)+
+    geom_sf(data=vacant)+
+    labs(title="Location of Vacant Lots")+
+    mapTheme())
 
 ```
 
@@ -259,23 +268,42 @@ ACS_2018 <- get_acs(geography = "tract",
   st_transform('ESRI:102729')  %>% 
   dplyr::select(variable, estimate, GEOID) %>%
   spread(variable, estimate) %>%
-  mutate(percent_NoHS= (HS_LessThan9Grade+HS_9to12Grade) / VotingAgePop,
-         percent_HS= HS/ VotingAgePop,
-         percent_SomeCollege= SomeCollege / VotingAgePop,
-         percent_assoc = Associate / VotingAgePop,
-         percent_bach = Bach / VotingAgePop,
-         percent_GradProf = GradProf / VotingAgePop,
-         percent_ownOcc= Pop_OwnOcc / Pop_occHousing,
-         percent_rentOcc = Pop_RentOcc / Pop_occHousing,
-         percent_Own_Pre2010 = (Pop_Own1989earlier + Pop_Own1990to1999 + Pop_Own2000to2009) / Pop_occHousing,
-         percent_Own_2010to2014 = Pop_Own2010to2014 / Pop_occHousing,
-         percent_Own_2015to2018 = (Pop_Own2015to2016 + Pop_Own2017later) / Pop_occHousing,
-         percent_Rent_Pre2010 = (Pop_Rent1989earlier + Pop_Rent1990to1999 + Pop_Rent2000to2009) / Pop_occHousing,
-         percent_Rent_2010to2014 = Pop_Rent2010to2014 / Pop_occHousing,
-         percent_Rent_2015to2018 = (Pop_Rent2015to2016 + Pop_Rent2017later) / Pop_occHousing)%>%
+  mutate(percent_NoHS= ifelse(VotingAgePop>0,((HS_LessThan9Grade+HS_9to12Grade) / VotingAgePop),0),
+         percent_HS= ifelse(VotingAgePop>0, HS/ VotingAgePop,0),
+         percent_SomeCollege= ifelse(VotingAgePop>0,SomeCollege / VotingAgePop,0),
+         percent_assoc = ifelse(VotingAgePop>0,Associate / VotingAgePop,0),
+         percent_bach = ifelse(VotingAgePop>0,Bach / VotingAgePop,0),
+         percent_GradProf = ifelse(VotingAgePop>0,GradProf / VotingAgePop,0),
+         percent_ownOcc= ifelse(Pop_occHousing>0,Pop_OwnOcc / Pop_occHousing,0),
+         percent_rentOcc = ifelse(Pop_occHousing>0,Pop_RentOcc / Pop_occHousing,0),
+         percent_Own_Pre2010 = ifelse(Pop_occHousing>0,
+                                      ((Pop_Own1989earlier + Pop_Own1990to1999 + Pop_Own2000to2009) / Pop_occHousing),0),
+         percent_Own_2010to2014 = ifelse(Pop_occHousing>0,Pop_Own2010to2014 / Pop_occHousing,0),
+         percent_Own_2015to2018 = ifelse(Pop_occHousing>0,((Pop_Own2015to2016 + Pop_Own2017later) / Pop_occHousing),0),
+         percent_Rent_Pre2010 = ifelse(Pop_occHousing>0,
+                                       ((Pop_Rent1989earlier + Pop_Rent1990to1999 + Pop_Rent2000to2009) / Pop_occHousing),0),
+         percent_Rent_2010to2014 = ifelse(Pop_occHousing>0,Pop_Rent2010to2014 / Pop_occHousing,0),
+         percent_Rent_2015to2018 = ifelse(Pop_occHousing>0,
+                                          ((Pop_Rent2015to2016 + Pop_Rent2017later) / Pop_occHousing),0))%>%
  dplyr::select(Median_HHInc, percent_NoHS, percent_HS, percent_SomeCollege, percent_assoc, percent_bach, percent_GradProf, 
          percent_ownOcc, percent_rentOcc, percent_Own_Pre2010, percent_Own_2010to2014, percent_Own_2015to2018, 
-         percent_Rent_Pre2010, percent_Rent_2010to2014,   percent_Rent_2015to2018)
+         percent_Rent_Pre2010, percent_Rent_2010to2014,   percent_Rent_2015to2018)%>%
+  mutate(Median_HHInc = replace_na(Median_HHInc, 0),
+         percent_NoHS = replace_na(percent_NoHS,0),
+         percent_HS= replace_na(percent_HS,0),
+         percent_SomeCollege= replace_na(percent_SomeCollege,0),
+         percent_assoc= replace_na(percent_assoc,0),
+         percent_bach= replace_na(percent_bach,0),
+         percent_GradProf= replace_na(percent_GradProf,0),
+         percent_ownOcc= replace_na(percent_ownOcc,0),
+         percent_rentOcc= replace_na(percent_rentOcc,0),
+         percent_Own_Pre2010= replace_na(percent_Own_Pre2010,0),
+         percent_Own_2010to2014= replace_na(percent_Own_2010to2014,0),
+         percent_Own_2015to2018= replace_na(percent_Own_2015to2018,0),
+         percent_Rent_Pre2010= replace_na(percent_Rent_Pre2010,0),
+         percent_Rent_2010to2014= replace_na(percent_Rent_2010to2014,0),
+         percent_Rent_2015to2018= replace_na(percent_Rent_2015to2018,0))
+  
 ```
 
 we should add in some summary stats and exploratory analyses of the variables across space. 
@@ -307,11 +335,8 @@ vars_net <-
 vars_net<-
   vars_net%>%
   st_centroid()%>%
-  st_join(ACS_2018)
-
-# %>%
-#   na.omit()
-
+  st_join(ACS_2018)%>%
+  na.omit()
 
 ```
 
@@ -320,11 +345,13 @@ vars_net<-
 
 ### Nearest Neighbor Prediction Factors by Fishnet
 
-point features turned into nearest neighrbor
 
+point features turned into nearest neighbor
+
+DELETE THIS ONCE WE'VE CONFIRMED MY FEATURE PLOTS BELOW WILL WORK
 ```{r Creating iterative list, message=FALSE, warning=FALSE, include=TRUE}
 
-vars_net.long <- 
+vars_net.long <-
   gather(vars_net, Variable, value, -geometry, -uniqueID)
 
 vars <- unique(vars_net.long$Variable)
@@ -335,11 +362,14 @@ for(i in vars){
     ggplot() +
       geom_sf(data = filter(vars_net.long, Variable == i), aes(fill=value), colour=NA) +
       scale_fill_viridis(name="") +
-      labs(title=i) +
+      labs(title=i)+
       mapTheme()}
 
-#do.call(grid.arrange,c(mapList, ncol =9, top = "Prediction Factors by Fishnet"))
+do.call(grid.arrange,c(mapList, ncol =3, top = "Prediction Factors by Fishnet"))
+```
 
+
+```{r nn_function}
 nn_function <- function(measureFrom,measureTo,k) {
   measureFrom_Matrix <-
     as.matrix(measureFrom)
@@ -380,9 +410,76 @@ vars_net <-
         nn_function(st_c(st_coid(vars_net)), st_c(vacant),3))
 
 
-
 ```
 
+HERE ARE MY NEW FEATURE PLOTS; WE CAN EASILY TWEAK OR ADD OTHER FEATURES.
+```{r feature plots}
+grid.arrange(ncol=3,
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=Median_HHInc))+
+    scale_color_viridis()+
+    labs(title="Median Household Income")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=percent_HS))+
+    scale_color_viridis()+
+    labs(title="Percent of Voting-Age Population \nwithout a High School Degree")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=percent_bach))+
+    scale_color_viridis()+
+    labs(title="Percent of Voting-Age Population \nwith a Bachelors Degree")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=percent_ownOcc))+
+    scale_color_viridis()+
+    labs(title="Percent of the Population Living \nin Owner-Occupied Housing")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=percent_Own_Pre2010))+
+    scale_color_viridis()+
+    labs(title="Percent of the Population Living in \nOwner-Occupied Housing: Moved in Before 2010")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=percent_Own_2015to2018))+
+    scale_color_viridis()+
+    labs(title="Percent of the Population Living in \nOwner-Occupied Housing: Moved in Between 2015-2018")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=percent_Rent_Pre2010))+
+    scale_color_viridis()+
+    labs(title="Percent of the Population Living in \nRenter-Occupied Housing: Moved in Before 2010")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=percent_Own_2015to2018))+
+    scale_color_viridis()+
+    labs(title="Percent of the Population Living in \nRenter-Occupied Housing: Moved in Between 2015-2018")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=Sanitation.nn))+
+    scale_color_viridis()+
+    labs(title="Distance to Nearest 3 Saniation Violations")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=Service.nn))+
+    scale_color_viridis()+
+    labs(title="Distance to Nearest 3 Service Requests")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=Vacant.nn))+
+    scale_color_viridis()+
+    labs(title="Distance to Nearest 3 Vacant Lots")+
+    mapTheme(),
+  ggplot()+
+    geom_sf(data=vars_net, aes(color=ccDistance))+
+    scale_color_viridis()+
+    labs(title="Distance to Center City")+
+    mapTheme())
+            
+```
+
+
+DELETE THIS ONCE WE'VE CONFIRMED MY FEATURE PLOTS BELOW WILL WORK
 ```{r vars net for nn features, message=FALSE, warning=FALSE, include=TRUE}
 ## Visualize the NN feature
 vars_net.long.nn <- 
@@ -409,16 +506,17 @@ mapList <- list()
 for(i in vars){
   mapList[[i]] <- 
     ggplot() +
-      geom_sf(data = filter(vars_net.long.nn, Variable == i), aes(fill=value), colour=NA, ) +
+      geom_sf(data = filter(vars_net.long.nn, Variable == i), aes(fill=value), colour=NA) +
       scale_fill_viridis(name="") +
       labs(title=i) +
-      mapTheme()}
+      mapTheme(title_size=10)}
 
 do.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor Prediction Factors by Fishnet"))
 
 #do.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor risk Factors by Fishnet"))
 
 ```
+
 
 ### Creating Distance to Center City as a variable
 ```{r Measuring distance to one point, message=FALSE, warning=FALSE, include=TRUE}
