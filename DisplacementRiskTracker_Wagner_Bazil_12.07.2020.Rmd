@@ -37,7 +37,7 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 
 mapTheme <- function(base_size = 12) {
   theme(
-    text = element_text( color = "black"),
+    text = element_text( color = "black", size=12),
     plot.title = element_text(size = 13,colour = "black"),
     plot.subtitle=element_text(face="italic"),
     plot.caption=element_text(hjust=0),
@@ -53,7 +53,7 @@ mapTheme <- function(base_size = 12) {
 
 plotTheme <- function(base_size = 12) {
   theme(
-    text = element_text( color = "black"),
+    text = element_text( color = "black", size=12),
     plot.title = element_text(size = 14,colour = "black"),
     plot.subtitle = element_text(face="italic"),
     plot.caption = element_text(hjust=0),
@@ -107,9 +107,8 @@ st_read("http://data.phl.opendata.arcgis.com/datasets/405ec3da942d4e20869d4e1449
 st_transform('ESRI:102729') %>%
 st_union()
 
-# ggplot() + 
+# ggplot() +
 #   geom_sf(data = boundary)
-
 
 ```
 
@@ -186,8 +185,8 @@ sanitation<-
     st_transform(st_crs(fishnet)) %>%
     mutate(Legend = "Sanitation")
 
-# ggplot() +
-#   geom_sf(data = sanitation)
+ggplot() +
+  geom_sf(data = sanitation)
 
 # Service Data
 service<-
@@ -199,6 +198,9 @@ service<-
     st_transform(st_crs(fishnet)) %>%
     mutate(Legend = "Service")
 
+ggplot() +
+  geom_sf(data = service)
+
 # Vacant Lot Data
 vacant<-
   st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+public_cases_fc+WHERE+service_name+=+'Vacant+House+or+Commercial'+AND+requested_datetime+>=+'2015-01-01'+AND+requested_datetime+<+'2019-12-31'&filename=sanitation&format=geojson&skipfields=cartodb_id") %>%
@@ -209,6 +211,8 @@ vacant<-
     st_transform(st_crs(fishnet)) %>%
     mutate(Legend = "Vacant")
 
+ggplot() +
+  geom_sf(data = vacant)
 
 
 ```
@@ -285,7 +289,7 @@ Aggregating features to our fishnet
 #put other data into fishnet. 
 
 vars_net <- 
-  rbind(sanitation, service, vacant)  %>%
+  rbind(sanitation, service, vacant) %>%
   st_join(., fishnet, join=st_within) %>% #if point is within this polygon, assign the polygon id to this point. then get it into the unit of grid polygons
   st_drop_geometry() %>%
   group_by(uniqueID, Legend) %>% #group by unique id and the type of variable, in this case just one cars
@@ -303,8 +307,11 @@ vars_net <-
 vars_net<-
   vars_net%>%
   st_centroid()%>%
-  st_join(ACS_2018)%>%
-  na.omit()
+  st_join(ACS_2018)
+
+# %>%
+#   na.omit()
+
 
 ```
 
@@ -372,6 +379,8 @@ vars_net <-
       Vacant.nn =
         nn_function(st_c(st_coid(vars_net)), st_c(vacant),3))
 
+
+
 ```
 
 ```{r vars net for nn features, message=FALSE, warning=FALSE, include=TRUE}
@@ -380,18 +389,34 @@ vars_net.long.nn <-
   dplyr::select(vars_net, ends_with(".nn")) %>%
     gather(Variable, value, -geometry)
 
+# ggplot()+
+#   geom_sf(data=vars_net.long.nn, aes(fill=q5(value)))+
+#   scale_fill_viridis(discrete = TRUE,
+#                     labels = qBr(vars_net.long.nn, "value"),
+#                     name = "Quintile Breaks") +
+#   facet_wrap(~Variable)
+#   
+#   ggplot()+
+#   geom_sf(data=ACS_2018_plot, aes(fill=q5(percent_own_pre1999_per)))+
+#   scale_fill_viridis(discrete = TRUE,
+#                     labels = qBr(ACS_2018_plot, "percent_own_pre1999_per"),
+#                     name = "Quintile Breaks") +
+#   mapTheme()
+
 vars <- unique(vars_net.long.nn$Variable)
 mapList <- list()
 
 for(i in vars){
   mapList[[i]] <- 
     ggplot() +
-      geom_sf(data = filter(vars_net.long.nn, Variable == i), aes(fill=value), colour=NA) +
+      geom_sf(data = filter(vars_net.long.nn, Variable == i), aes(fill=value), colour=NA, ) +
       scale_fill_viridis(name="") +
       labs(title=i) +
       mapTheme()}
 
-#o.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor Prediction Factors by Fishnet", fontsize=2))
+do.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor Prediction Factors by Fishnet"))
+
+#do.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor risk Factors by Fishnet"))
 
 ```
 
@@ -441,9 +466,14 @@ Describe modeling approach
 ### Correlation Plots
 
 ```{r correlation tests, fig.height=15, fig.width=15, message=FALSE, warning=FALSE, include=TRUE}
+# correlation.long <-
+#   st_drop_geometry(final_net) %>%
+#     dplyr::select(-uniqueID, -cvID, -name,-ccDistance) %>%
+#     gather(Variable, Value, -countpermits)
+
 correlation.long <-
   st_drop_geometry(final_net) %>%
-    dplyr::select(-uniqueID, -cvID, -name,-ccDistance) %>%
+    dplyr::select(.,-Sanitation, -Vacant, -Service, -cvID, -percent_assoc,-percent_Own_2010to2014, -percent_Rent_2010to2014, -percent_NoHS, -percent_SomeCollege,-permit.isSig, -percent_GradProf, -percent_rentOcc, -ccDistance) %>%
     gather(Variable, Value, -countpermits)
 
 correlation.cor <-
@@ -819,3 +849,4 @@ permit_risk_sf %>%
 ```
 
 ## How the Analysis meets the use case and what we could do to make the analysis better
+
