@@ -29,6 +29,18 @@ library(remotes)
 
 root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+qBr <- function(df, variable, rnd) {
+  if (missing(rnd)) {
+    as.character(quantile(round(df[[variable]],0),
+                          c(.01,.2,.4,.6,.8), na.rm=T))
+  } else if (rnd == FALSE | rnd == F) {
+    as.character(formatC(quantile(df[[variable]]), digits = 3),
+                 c(.01,.2,.4,.6,.8), na.rm=T)
+  }
+}
+
+q5 <- function(variable) {as.factor(ntile(variable, 5))}
 ```
 
 
@@ -111,8 +123,9 @@ st_union()
 grid.arrange(ncol=2,
 ggplot() + 
   geom_sf(data = boundary) +
-  geom_sf(data = permits, colour="red", size=0.1, show.legend = "point") +
-  labs(title= "Permits, Phil - 2010-2020"),
+  geom_sf(data = permits, colour="red", size=2, show.legend = "point") +
+  labs(title= "Residential Building Permits: 2010-2019")+
+  mapTheme(),
 ggplot() + 
   geom_sf(data = boundary, fill = "grey40") +
   stat_density2d(data = data.frame(st_coordinates(permits)), 
@@ -120,8 +133,10 @@ ggplot() +
                  size = 0.01, bins = 40, geom = 'polygon') +
   scale_fill_viridis() +
   scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
-  labs(title = "Density of Permits") +
+  labs(title = "Permit Density: 2010-2019") +
+  mapTheme()+
   theme(legend.position = "none"))
+  
 
 #Fishnet code
 fishnet <- 
@@ -252,6 +267,7 @@ ACS_2018 <- get_acs(geography = "tract",
          percent_GradProf = GradProf / VotingAgePop,
          percent_ownOcc= Pop_OwnOcc / Pop_occHousing,
          percent_rentOcc = Pop_RentOcc / Pop_occHousing,
+         percent_own_pre1999=(Pop_Own1989earlier + Pop_Own1990to1999) / Pop_occHousing,
          percent_Own_Pre2010 = (Pop_Own1989earlier + Pop_Own1990to1999 + Pop_Own2000to2009) / Pop_occHousing,
          percent_Own_2010to2014 = Pop_Own2010to2014 / Pop_occHousing,
          percent_Own_2015to2018 = (Pop_Own2015to2016 + Pop_Own2017later) / Pop_occHousing,
@@ -259,8 +275,50 @@ ACS_2018 <- get_acs(geography = "tract",
          percent_Rent_2010to2014 = Pop_Rent2010to2014 / Pop_occHousing,
          percent_Rent_2015to2018 = (Pop_Rent2015to2016 + Pop_Rent2017later) / Pop_occHousing)%>%
  dplyr::select(Median_HHInc, percent_NoHS, percent_HS, percent_SomeCollege, percent_assoc, percent_bach, percent_GradProf, 
-         percent_ownOcc, percent_rentOcc, percent_Own_Pre2010, percent_Own_2010to2014, percent_Own_2015to2018, 
+         percent_ownOcc, percent_rentOcc, percent_own_pre1999, percent_Own_Pre2010, percent_Own_2010to2014, percent_Own_2015to2018, 
          percent_Rent_Pre2010, percent_Rent_2010to2014,   percent_Rent_2015to2018)
+```
+
+```{r}
+ACS_2018_plot<-
+  ACS_2018%>%
+  mutate(percent_Own_Pre2010_per=percent_Own_Pre2010*100)%>%
+  mutate(percent_Own_2015to2018_per=percent_Own_2015to2018*100)%>%
+  mutate(percent_Rent_2015to2018_per=percent_Rent_2015to2018*100)%>%
+  mutate(percent_own_pre1999_per=percent_own_pre1999*100)
+
+ggplot()+
+  geom_sf(data=ACS_2018_plot, aes(fill=q5(percent_own_pre1999_per)))+
+  scale_fill_viridis(discrete = TRUE,
+                    labels = qBr(ACS_2018_plot, "percent_own_pre1999_per"),
+                    name = "Quintile Breaks") +
+  mapTheme()
+
+ggplot()+
+  geom_sf(data=ACS_2018_plot, aes(fill=q5(percent_Own_Pre2010_per)))+
+  scale_fill_viridis(discrete = TRUE,
+                    labels = qBr(ACS_2018_plot, "percent_Own_Pre2010_per"),
+                    name = "Owned Pre-2010\n(Quintile Breaks)") +
+  labs(title = "Percentage of Residents in Owner-Occupied Housing Since before 2010") +
+  mapTheme()
+
+
+
+ggplot()+
+  geom_sf(data=ACS_2018_plot, aes(fill=q5(percent_Own_2015to2018_per)))+
+  scale_fill_viridis(discrete = TRUE,
+                    labels = qBr(ACS_2018_plot, "percent_Own_2015to2018_per"),
+                    name = "Quintile Breaks") +
+  mapTheme()
+
+
+ggplot()+
+  geom_sf(data=ACS_2018_plot, aes(fill=q5(percent_Rent_2015to2018_per)))+
+  scale_fill_viridis(discrete = TRUE,
+                    labels = qBr(ACS_2018_plot, "percent_Rent_2015to2018_per"),
+                    name = "New Renters 2015-2018\n(Quintile Breaks)") +
+  mapTheme()
+  
 ```
 
 
