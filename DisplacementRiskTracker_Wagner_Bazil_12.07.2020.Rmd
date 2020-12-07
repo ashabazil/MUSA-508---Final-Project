@@ -509,7 +509,6 @@ ggcorrplot(
 # colNameTbl <-
 # colnames(regVars)
 # 
-# write.csv(colNameTbl,"tablenames\\tablenames.csv", row.names = FALSE)
 
 
 ```
