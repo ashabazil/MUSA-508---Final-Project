@@ -1,7 +1,7 @@
 ---
-title: "Residential Building Permits"
+title: "Displacement Risk Tracker"
 author: "Asha Bazil, Hannah Wagner"
-date: "11/19/2020"
+date: "12/07/2020"
 output: html_document
 ---
 
@@ -77,7 +77,20 @@ palette5 <- c("#25CB10", "#5AB60C", "#8FA108",   "#C48C04", "#FA7800")
 
 ## Intro
 
-Motivate the analysis – “What is the use case; why would someone want to replicate your analysis and why would they use this approach?”
+This analysis aims to create a tool that can be used by city housing departments across the United States as a means of predicting and preventing potential residential displacement. We pilot this idea with the Philadelphia Division of Housing and Community Development in mind, in an effort to help the division allocate limited housing resources to vulnerable residents. 
+
+Our method uses issuance of residential building permits as an indicator of displacement risk. Neighborhoods with significant residential construction often experience higher levels of displacement, which we define as the movement of longtime residents due to uneven distribution of home value increases. New residential construction and renovations increase home values, but also raise property taxes on nearby older homes, whose owners do not benefit from improvements themselves. This increase in cost of living drives lower income residents out of the neighborhood in search of more affordable areas, which are likely further away from amenities such as public transportation, schools, and green spaces. 
+
+This Displacement Tracker Tool works to prevent displacement in three key ways:
+
+1 It anticipates neighborhoods where home values may increase and threaten the ability of existing residents to remain
+
+2 Identifies trusted community partners in each area of the city who can communicate effectively with local residents based on established trust
+
+3 Estimates the benefit various policy levers, such as flip taxes or home renovation subsidies, can have on the long-time residents of each neighborhood
+
+
+Because homeowners are often rightly skeptical of communications regarding their property and its value, we strive to ensure that this information comes from an already proven and trusted source. This data-driven and community facilitated approach to displacement prevention is a new approach to the issue that many other cities and regions would benefit from implementing. We hope that this open-data analysis will serve as a basis for cities looking to rethink their response to displacement. 
 
 
 ## Data
@@ -107,6 +120,16 @@ st_union()
 
 # ggplot() +
 #   geom_sf(data = boundary)
+
+
+rcos <-
+st_read("http://data.phl.opendata.arcgis.com/datasets/efbff0359c3e43f190e8c35ce9fa71d6_0.geojson") %>%
+st_transform('ESRI:102729')
+
+ggplot()+
+  geom_sf(data=rcos)
+
+	
 
 ```
 
@@ -412,9 +435,22 @@ vars_net <-
 
 ```
 
-HERE ARE MY NEW FEATURE PLOTS; WE CAN EASILY TWEAK OR ADD OTHER FEATURES.
+### Creating Distance to Center City as a variable
+```{r Measuring distance to one point, message=FALSE, warning=FALSE, include=TRUE}
+ccPoint <-
+  filter(nhood, name == "CENTER_CITY") %>%
+  st_centroid()
+
+vars_net$ccDistance =
+  st_distance(st_centroid(vars_net),ccPoint) %>%
+  as.numeric() 
+```
+
+
+### Variable Plots
+
 ```{r feature plots}
-grid.arrange(ncol=3,
+grid.arrange(ncol=6,
   ggplot()+
     geom_sf(data=vars_net, aes(color=Median_HHInc))+
     scale_color_viridis()+
@@ -511,22 +547,10 @@ for(i in vars){
       labs(title=i) +
       mapTheme(title_size=10)}
 
-do.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor Prediction Factors by Fishnet"))
+#do.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor Prediction Factors by Fishnet"))
 
 #do.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor risk Factors by Fishnet"))
 
-```
-
-
-### Creating Distance to Center City as a variable
-```{r Measuring distance to one point, message=FALSE, warning=FALSE, include=TRUE}
-ccPoint <-
-  filter(nhood, name == "CENTER_CITY") %>%
-  st_centroid()
-
-vars_net$ccDistance =
-  st_distance(st_centroid(vars_net),ccPoint) %>%
-  as.numeric() 
 ```
 
 ### Create final net
@@ -560,56 +584,6 @@ final_net <-
 ## Modeling Approach
 
 Describe modeling approach
-
-### Correlation Plots
-
-```{r correlation tests, fig.height=15, fig.width=15, message=FALSE, warning=FALSE, include=TRUE}
-# correlation.long <-
-#   st_drop_geometry(final_net) %>%
-#     dplyr::select(-uniqueID, -cvID, -name,-ccDistance) %>%
-#     gather(Variable, Value, -countpermits)
-
-correlation.long <-
-  st_drop_geometry(final_net) %>%
-    dplyr::select(.,-Sanitation, -Vacant, -Service, -cvID, -percent_assoc,-percent_Own_2010to2014, -percent_Rent_2010to2014, -percent_NoHS, -percent_SomeCollege,-permit.isSig, -percent_GradProf, -percent_rentOcc, -ccDistance) %>%
-    gather(Variable, Value, -countpermits)
-
-correlation.cor <-
-  correlation.long %>%
-    group_by(Variable) %>%
-    summarize(correlation = cor(Value, countpermits, use = "complete.obs"))
-    
-ggplot(correlation.long, aes(Value, countpermits)) +
-  geom_point(size = 0.1) +
-  geom_text(data = correlation.cor, aes(label = paste("r =", round(correlation, 2))),
-            x=-Inf, y=Inf) +
-  geom_smooth(method = "lm", se = FALSE, colour = "black") +
-  facet_wrap(~Variable, ncol = 2, scales = "free") +
-  labs(title = "Permit count as a function of risk factors") +
-  plotTheme()
-
-
-
-regVars <- 
-  #final_net %>%
-  select_if(st_drop_geometry(final_net), is.numeric) %>%
-  dplyr::select(.,-Sanitation, -Vacant, -Service, -cvID, -percent_assoc,-percent_Own_2010to2014, -percent_Rent_2010to2014, -percent_NoHS, -percent_SomeCollege,-permit.isSig, -percent_GradProf, -percent_rentOcc) %>%
-  na.omit()
-
-ggcorrplot(
-  round(cor(regVars), 1), 
-  p.mat = cor_pmat(regVars),
-  colors = c("#25CB10", "white", "#FA7800"),
-  type="lower",
-  insig = "blank") +  
-    labs(title = "Correlation across numeric variables")
-
-# colNameTbl <-
-# colnames(regVars)
-
-
-```
-
 
 ### Plots of Local Moran's I for fishnet grid cells
 
@@ -678,6 +652,59 @@ ggplot() +
 
 ## What does k = 1 represent? the distance to my closest significant hot spot. Want the biggest number when we're close to a hot spot. Exposure to closest one.  Can we plot this?
 ```
+
+
+### Correlation Plot
+
+```{r correlation tests, fig.height=15, fig.width=15, message=FALSE, warning=FALSE, include=TRUE}
+# correlation.long <-
+#   st_drop_geometry(final_net) %>%
+#     dplyr::select(-uniqueID, -cvID, -name,-ccDistance) %>%
+#     gather(Variable, Value, -countpermits)
+
+correlation.long <-
+  st_drop_geometry(final_net) %>%
+    dplyr::select(.,-Sanitation, -Vacant, -Service, -cvID, -percent_assoc,-percent_Own_2010to2014, -percent_Rent_2010to2014, -percent_NoHS, -percent_SomeCollege,-permit.isSig, -percent_GradProf, -percent_rentOcc, -ccDistance) %>%
+    gather(Variable, Value, -countpermits)
+
+# correlation.cor <-
+#   correlation.long %>%
+#     group_by(Variable) %>%
+#     summarize(correlation = cor(Value, countpermits, use = "complete.obs"))
+#     
+# ggplot(correlation.long, aes(Value, countpermits)) +
+#   geom_point(size = 0.1) +
+#   geom_text(data = correlation.cor, aes(label = paste("r =", round(correlation, 2))),
+#             x=-Inf, y=Inf) +
+#   geom_smooth(method = "lm", se = FALSE, colour = "black") +
+#   facet_wrap(~Variable, ncol = 2, scales = "free") +
+#   labs(title = "Permit count as a function of risk factors") +
+#   plotTheme()
+
+
+
+regVars <- 
+  #final_net %>%
+  select_if(st_drop_geometry(final_net), is.numeric) %>%
+  dplyr::select(.,-Sanitation, -Vacant, -Service, -cvID, -percent_assoc,-percent_Own_2010to2014, -percent_Rent_2010to2014, -percent_NoHS, -percent_SomeCollege,-permit.isSig, -percent_GradProf, -percent_rentOcc) %>%
+  na.omit()
+
+ggcorrplot(
+  round(cor(regVars), 1), 
+  p.mat = cor_pmat(regVars),
+  colors = c("#25CB10", "white", "#FA7800"),
+  type="lower",
+  insig = "blank") +  
+    labs(title = "Correlation across numeric variables")
+
+# colNameTbl <-
+# colnames(regVars)
+
+
+```
+
+
+
 ### Linear regression
 
 We create two sets of independent variables -- one using the count variables and one using the nearest neighbor variables, including our newly created variables for distance to a significant theft hot spot. 
