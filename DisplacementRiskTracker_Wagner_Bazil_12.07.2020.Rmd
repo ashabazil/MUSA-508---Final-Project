@@ -121,11 +121,10 @@ st_union()
 # ggplot() +
 #   geom_sf(data = boundary)
 
-
 rcos <-
 st_read("http://data.phl.opendata.arcgis.com/datasets/efbff0359c3e43f190e8c35ce9fa71d6_0.geojson") %>%
 st_transform('ESRI:102729')
-	
+
 
 ```
 
@@ -191,6 +190,166 @@ st_transform(st_crs(fishnet))
   #mapTheme()
 ```
 
+### Home Value Exploration
+
+```{r real estate value}
+
+#real estate transfer data
+#this takes a while
+rt <- 
+  st_read("https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+RTT_SUMMARY+WHERE+display_date+>='2017-01-01'+AND+display_date+<=+'2018-12-31'AND+opa_account_num+!=+'NA'&format=geojson&skipfields=cartodb_id") %>% 
+st_transform('ESRI:102729')
+
+#filter for obs with values
+rtt <- rt %>% 
+    mutate(adjusted_fair_market_value = replace_na(adjusted_fair_market_value, 0), year = substr(display_date,1,4)) %>% 
+    filter(!(adjusted_fair_market_value == 0)) %>% 
+    dplyr::select(adjusted_fair_market_value, opa_account_num, year)
+
+#split by year 
+rtt_17 <- rtt %>% 
+    filter(year == 2017) %>% 
+    rename(value_17 = adjusted_fair_market_value) %>% 
+    filter(value_17<=9878103)
+
+rtt_18 <- rtt %>% 
+    filter(year == 2018) %>% 
+    rename(value_18 = adjusted_fair_market_value)
+
+#create difference percent, difference value, and categorical variable
+joined<-
+  st_join(rtt_17, rtt_18, by = opa_account_num) %>% 
+  mutate(difference = value_18-value_17,
+         dif_cat= case_when(difference == 0 ~ "No Change", 
+                            difference > 0 ~ "Increase in Home Value", 
+                            difference < 0 ~ "Decrease in Home Value",
+                            # anything that isn't in the above groups (i.e. NA which is No Answer) gets to be No Answer
+                            TRUE ~ "No Answer"),
+         dif_cat = factor(dif_cat, levels = c("Decrease in Home Value", "Increase in Home Value", "No Change", "No Answer")),
+         dif_pct= difference/value_18) %>%
+  filter(!(difference == is.na(.)))
+
+#split by increase and decreased
+
+decreasedHV <-
+  joined %>% 
+  filter(dif_cat == "Decrease in Home Value")
+
+increasedHV <-
+  joined %>% 
+  filter(dif_cat == "Increase in Home Value")
+
+ggplot() + 
+  geom_sf(data = boundary, fill = "grey40") +
+  stat_density2d(data = data.frame(st_coordinates(joined)), 
+                 aes(X, Y, fill = ..level.., alpha = ..level..),
+                 size = 0.02, bins = 50, geom = 'polygon') +
+  scale_fill_viridis() +
+  scale_alpha(range = c(0.00, 0.50), guide = FALSE) +
+  labs(title = "Home Value Difference") +
+  theme(legend.position = "none")+
+  mapTheme()
+
+# plot magnitude of percentage increases and decreases
+# NEED HELP CHANGING THE Q5 BREAKS
+grid.arrange(ncol=2,
+  ggplot()+
+    geom_sf(data = nhood, fill = "grey40") +
+    geom_sf(data=increasedHV, aes(color=q5(dif_pct)))+
+    scale_color_viridis(discrete = TRUE)+
+    labs(title="Home Value increases between 2017 and 2018\nby Percentage Difference")+
+    mapTheme(),
+  
+    ggplot()+
+    geom_sf(data = nhood, fill = "grey40") +
+    geom_sf(data=decreasedHV, aes(color=q5(dif_pct)))+
+    scale_color_viridis(discrete = TRUE)+
+    labs(title="Home Value decreases between 2017 and 2018\nby Percentage Difference")+
+    mapTheme())
+  
+  
+#plot of just homevalue
+#need help with the breaks
+grid.arrange(ncol=2,
+  ggplot()+
+    geom_sf(data = nhood, fill = "grey40") +
+    geom_sf(data=rtt_17, aes(color=value_17))+
+    scale_color_viridis()+
+    labs(title="Home Value 2017")+
+    mapTheme(),
+  
+   ggplot()+
+    geom_sf(data = nhood, fill = "grey40") +
+    geom_sf(data=rtt_18, aes(color=q5(value_18)))+
+    scale_color_viridis(discrete = TRUE)+
+    labs(title="Home Value 2018")+
+    mapTheme())
+  
+
+#denisty of homevalues in 2017 and 2018
+grid.arrange(ncol=2,
+ggplot() + 
+  geom_sf(data = nhood, fill = "grey40") +
+  stat_density2d(data = data.frame(st_coordinates(rtt_17)), 
+                 aes(X, Y, fill = ..level.., alpha = ..level..),
+                 size = 0.02, bins = 50, geom = 'polygon') +
+  scale_fill_viridis() +
+  scale_alpha(range = c(0.00, 0.50), guide = FALSE) +
+  labs(title = "2017") +
+  theme(legend.position = "none")+
+  mapTheme(),
+
+ggplot() + 
+  geom_sf(data = nhood, fill = "grey40") +
+  stat_density2d(data = data.frame(st_coordinates(rtt_18)), 
+                 aes(X, Y, fill = ..level.., alpha = ..level..),
+                 size = 0.01, bins = 40, geom = 'polygon') +
+  scale_fill_viridis() +
+  scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
+  labs(title = "2018") +
+  theme(legend.position = "none")+
+  mapTheme())
+
+#density of change in homevalues based on increasing and decreasing
+grid.arrange(ncol=2,
+ggplot() + 
+  geom_sf(data = nhood, fill = "grey40") +
+  stat_density2d(data = data.frame(st_coordinates(increasedHV)), 
+                 aes(X, Y, fill = ..level.., alpha = ..level..),
+                 size = 0.02, bins = 50, geom = 'polygon') +
+  scale_fill_viridis() +
+  scale_alpha(range = c(0.00, 0.50), guide = FALSE) +
+  labs(title = "Where homevalues increased") +
+  theme(legend.position = "none")+
+  mapTheme(),
+
+ggplot() + 
+  geom_sf(data = nhood, fill = "grey40") +
+  stat_density2d(data = data.frame(st_coordinates(decreasedHV)), 
+                 aes(X, Y, fill = ..level.., alpha = ..level..),
+                 size = 0.01, bins = 40, geom = 'polygon') +
+  scale_fill_viridis() +
+  scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
+  labs(title = "Where homevalues decreased") +
+  theme(legend.position = "none")+
+  mapTheme())
+
+#histogram of change in home value, kind of ugly
+joined %>%
+  tibble::rowid_to_column(., "ID") %>%
+  dplyr::filter(., !(dif_cat %in% c("No Change", "No Answer"))) %>%
+  dplyr::select(difference,dif_pct, ID) %>%
+  ggplot(aes(x = dif_pct)) +
+  geom_density(  fill="#1f2a59", color="#e9ecef") +
+  scale_x_continuous(limits = c(-4.5,1.4))+
+  scale_y_continuous(limits = c(0,1.25)) +
+  labs(x = "Percentage Change in Value", y = "Responses",
+       title = "Percentage Change in Value, 2017 and 2018") +
+  plotTheme() + theme(legend.position = "bottom", axis.text.x = element_text(size = 8))
+
+```
+
+
 ### 311 and Census Data
 
 ```{r 311 data}
@@ -227,6 +386,8 @@ vacant<-
     st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
     st_transform(st_crs(fishnet)) %>%
     mutate(Legend = "Vacant")
+
+
 
 #Plot of all the point data - a little cluttered so maybe we just want to skip this
 grid.arrange(ncol=3,
@@ -337,6 +498,8 @@ Aggregating features to our fishnet
 ```{r Putting variables into fishnet, message=FALSE, warning=FALSE, include=TRUE}
 
 #put other data into fishnet. 
+
+
 
 vars_net <- 
   rbind(sanitation, service, vacant) %>%
@@ -510,6 +673,8 @@ grid.arrange(ncol=6,
     scale_color_viridis()+
     labs(title="Distance to Center City")+
     mapTheme())
+
+
             
 ```
 
