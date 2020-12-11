@@ -244,7 +244,7 @@ joined<-
                             # anything that isn't in the above groups (i.e. NA which is No Answer) gets to be No Answer
                             TRUE ~ "No Answer"),
          dif_cat = factor(dif_cat, levels = c("Decrease in Home Value", "Increase in Home Value", "No Change", "No Answer")),
-         dif_pct= (difference/value_18)*100) %>% #to do percent change, should we divided by value_17? 
+         dif_pct= (difference/value_17)*100) %>%
   filter(!(difference == is.na(.)))
 
 #split by increase and decreased
@@ -274,6 +274,7 @@ The figures below depict the increases and decreases in home value between 2017 
 
 ```{r home value exploratory plots, message=FALSE, warning=FALSE}
 # plot magnitude of percentage increases and decreases
+#flip color scale for decrease, filter out small decrease differences
 
 grid.arrange(ncol=2,
   ggplot()+
@@ -399,6 +400,7 @@ ggplot() +
 Finally, the histogram below shows the distribution of percentage changes in home value from 2017 to 2018. From this plot, we can see that...
 
 I changed the dif_pct above and this changed. let's discuss.
+remove?
 ```{r home value histogram, message=FALSE, warning=FALSE}
 #histogram of change in home value, kind of ugly
 joined %>%
@@ -1164,6 +1166,7 @@ permit_risk_sf <-
 #   #scale_y_continuous(limits = c(0,100)) +
 #   plotTheme()
 
+#does this plot draw?
 permit_risk_sf_nh_risk <-
   permit_risk_sf %>%
   dplyr::select(cvID, Risk_Category, countpermits) %>%
@@ -1207,7 +1210,7 @@ permit_risk_sf %>%
 ## How the Analysis meets the use case and what we could do to make the analysis better
 
 
-As part of our analysis, we collected data on Registered Community Organizations (RCOs) in Philadelphia, including the RCO boundaries and primary contact information. We have matched the RCOs with Philadelphia neighborhoods and provided a table of each RCO that makes the contact information readily available. We intend this information to complement the results from our predictive analysis: as neighborhoods are identified as at risk to displacement, staff from the City may wish to contact trusted organizations in that location in order to begin a process to support longtime residents.
+As part of our analysis, we collected data on Registered Community Organizations (RCOs) in Philadelphia, including the RCO boundaries and primary contact information. We have matched the RCOs with Philadelphia neighborhoods and provided a table of each RCO that makes the contact information readily available. We intend this information to complement the results from our predictive analysis: as neighborhoods are identified as at risk to displacement, staff from the City may wish to contact trusted organizations in that location in order to begin a process to support longtime residents. 
 
 ```{r join RCOs to neighborhoods}
 nhood_name<- nhood%>% dplyr::select(name)%>%
