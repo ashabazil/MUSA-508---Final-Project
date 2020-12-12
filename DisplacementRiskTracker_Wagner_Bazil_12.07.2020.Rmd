@@ -464,23 +464,24 @@ grid.arrange(ncol = 3,
 
 
 Finally, we gathered data from the U.S. Census Bureau 2018 5-year American Community Survey (ACS) at the census tract level on median household income, education level, and moving dates. We used these data to calculate the following variables for inclusion in the predictive model:
-*Percent of Voting Age Population with the following Education levels:
- +No High School Degree
- +High School Degree
- +Some College Education
- +Associate's Degree
- +Bachelor's Degree
- +Graduate or Professional Degree
-*Percent of Residents in Owner-Occupied Housing
-*Percent of Residents in Renter-Occupied Housing
-*Percent of Residents who Moved into Owner-Occupied Housing:
- +Before 2010
- +2010 to 2014
- +2015 to 2018
-*Percent of Residents who Moved into Renter-Occupied Housing:
- +Before 2010
- +2010 to 2014
- +2015 to 2018
+
+* Percent of Voting Age Population with the following Education levels:
+ + No High School Degree
+ + High School Degree
+ + Some College Education
+ + Associate's Degree
+ + Bachelor's Degree
+ + Graduate or Professional Degree
+* Percent of Residents in Owner-Occupied Housing
+* Percent of Residents in Renter-Occupied Housing
+* Percent of Residents who Moved into Owner-Occupied Housing:
+ + Before 2010
+ + 2010 to 2014
+ + 2015 to 2018
+* Percent of Residents who Moved into Renter-Occupied Housing:
+ + Before 2010
+ + 2010 to 2014
+ + 2015 to 2018
 
 As described in further detail below, we used a selection of these variables within our predictive model as indicators of residential building permit locations.
 
@@ -560,7 +561,6 @@ ACS_2018 <- get_acs(geography = "tract",
          percent_Rent_2015to2018= replace_na(percent_Rent_2015to2018,0))
   
 ```
-
 
 The figures below show the distribution of residents in owner-occupied housing who moved in before 2010 (left), and between 2015 and 2018 (right). From these maps we can see that some locations have a greater percentage of new homeowners (yellow areas on the map at right), including the Point Breeze and Northern Liberties Neighborhoods.
 
@@ -685,7 +685,6 @@ vars_net$ccDistance =
   as.numeric() 
 
 ```
-
 
 ### Variable Plots
 The figures below depict a selection of risk factors mapped to the fishnet. The variety of spatial distributions across these maps indicate that the risk factors illustrate different spatial processes. For example, locations with high concentrations of residents with a Bachelor's degree are concentrated in the Center City and Northwest Philadelphia areas, while distance to the nearest three sanitation violations are distributed roughly evenly across the city. 
@@ -867,7 +866,6 @@ ggplot() +
 ## What does k = 1 represent? the distance to my closest significant hot spot. Want the biggest number when we're close to a hot spot. Exposure to closest one.  Can we plot this?
 ```
 
-
 ### Correlation Plot
 
 From the correlation plot of our numerical variables, we see that this new Distnace to Hotspot variable is negatively correlated with the count of new construction permits. That is, as the distance to a significant hotspot increases, the count of permits decreases. 
@@ -920,8 +918,6 @@ ggcorrplot(
 
 
 ```
-
-
 
 ### Regression
 
@@ -976,7 +972,6 @@ for (i in cvID_list) {
 
 
 ```
-
 
 ## Cross validation methods
 
@@ -1103,13 +1098,13 @@ st_drop_geometry(reg.summary) %>%
 
 ```
 
-
+### Racial Generalizability
 
 WE CAN TAKE THIS OUT MAYBE, THE SPATIAL PROCESS DOESN'T REDUCE ERRORS AT ALL BETWEEN RACE. COULD BE A DISCUSSION ABOUT HOW AREAS WITH HIGHER NON WHITE POPULATIONS ARE SEEING HIGHER PERMIT COUNTS AND DISPLACEMENT?
 
 Another important level of generalizability is across social dimensions such as race and income. Below we see a map of the racial context of Philadelphia looking at the distinction between majority white and non white census tracts. 
 
-```{r race map}
+```{r race map, message=FALSE, warning=FALSE, include=TRUE}
 
 tracts18 <- 
   get_acs(geography = "tract", variables = c("B01001_001E","B01001A_001E"), 
@@ -1127,13 +1122,15 @@ tracts18 <-
    ggplot()+
     geom_sf(data=tracts18, aes(fill=raceContext))+
     #scale_color_viridis()+
-    labs(title="Race Context in Philadelphia")+
+    labs(title="Race Context in Philadelphia\n2018")+
     mapTheme()
 
 
 ```
 
-```{r race predictions}
+If we split the mean error by racial context, we see that while the inclusion of the spatial process reduces the magnitude of errors for both non-white and white neighborhoods, it under predicts the risk of new construction permits in non-white areas and over predicts in white areas. This is concerning, and means that any decision makers looking to use the predictions of this model should be aware of this tendency to under predict risk in majority non-white neighborhoods. This under prediction is problematic as it might reduce the amount of resources and support given to non-white neighborhoods due to an incorrectly lower risk prediction. We hope to improve this model's generalizabilty across race in future iterations of the analysis to minimize this potetial exacerbation of resource inequities. 
+
+```{r race predictions, message=FALSE, warning=FALSE, include=TRUE}
 
 reg.summary %>% 
   filter(str_detect(Regression, "LOGO")) %>%
@@ -1147,7 +1144,6 @@ reg.summary %>%
       kable(caption = "Mean Error by neighborhood racial context") %>%
         kable_styling("striped", full_width = F) 
 ```
-
 
 
 ## Risk Map and Results
@@ -1184,7 +1180,7 @@ permit_risk_sf %>%
     mapTheme()
 ```
 
-The bar chart below displays the top five neighborhoods at risk of new construction permits and risk of displacemnet. Based on the map of risk, it is not surprising that three of these top five neighborhoods are located near one another in north Philadelphia (Fishtown, West Kensington, and East Kensington), with the remaining two also in close proximity to each other (Grad Hosptial and Point Breeze). These results indicate that improvements to the spatial process in our model are incredibly important, as the risk of new construction permits is very much not randomly distributed across space. 
+The bar chart below displays the top five neighborhoods at risk of new construction permits and risk of displacement. Based on the map of risk, it is not surprising that three of these top five neighborhoods are located near one another in north Philadelphia (Fishtown, West Kensington, and East Kensington), with the remaining two also in close proximity to each other (Grad Hospital and Point Breeze). These results indicate that improvements to the spatial process in our model are incredibly important, as the risk of new construction permits is very much not randomly distributed across space. 
 
 ```{r for risk prediction, message=FALSE, warning=FALSE, include=TRUE}
 
@@ -1234,12 +1230,11 @@ The bar chart below displays the top five neighborhoods at risk of new construct
 ```
 
 
-
 ## Community Partners
 
 As part of our analysis, we collected data on Registered Community Organizations (RCOs) in Philadelphia, including the RCO boundaries and primary contact information. We have matched the RCOs with Philadelphia neighborhoods and provided a table of each RCO that makes the contact information readily available. We intend this information to complement the results from our predictive analysis: as neighborhoods are identified as at risk to displacement, staff from the City may wish to contact trusted organizations in that location in order to begin a process to support longtime residents.
 
-```{r join RCOs to neighborhoods}
+```{r join RCOs to neighborhoods, message=FALSE, warning=FALSE, include=TRUE}
 nhood_name<- nhood%>% dplyr::select(name)%>%
   rename(Neighborhood=name)
   
@@ -1262,20 +1257,20 @@ st_drop_geometry(rcos_final) %>%
 
 Returning to our original use case, this analysis and model has successfully laid the foundation for achieving our vision of a Displacemnet Risk Tracking tool to be used by city governments. 
 
-1 Anticipating neighborhoods where home values may increase
+* 1 Anticipating neighborhoods where home values may increase
 
-Achieved: This model accurately predicts the risk of new construction across the city, and has identified neighborhoods at risk of experiencing displacement. Our exploratory analysis has also indicated areas with large recent changes in home values.
-Next steps: We would like to incorporate the recent change in home value into our Risk Map at the neighborhood level.
+ + Achieved: This model accurately predicts the risk of new construction across the city, and has identified neighborhoods at risk of experiencing displacement. Our exploratory analysis has also indicated areas with large recent changes in home values.
+ + Next steps: We would like to incorporate the recent change in home value into our Risk Map at the neighborhood level.
 
-2 Identifying trusted community partners in each area of the city
+* 2 Identifying trusted community partners in each area of the city
 
-Achieved: A list of RCOs is joined into our neighborhood list.
-Next Steps: We would like to create an interactive risk map that displays these partners upon clicking on a neighborhood on the map. 
+ + Achieved: A list of RCOs is joined into our neighborhood list.
+ + Next Steps: We would like to create an interactive risk map that displays these partners upon clicking on a neighborhood on the map. 
 
-3 By estimating the benefit various policy levers, such as flip taxes or home renovation subsidies, can have on the long-time residents of each neighborhood.
+* 3 By estimating the benefit various policy levers, such as flip taxes or home renovation subsidies, can have on the long-time residents of each neighborhood.
 
-Achieved: We have indicated the changes in home value that have been recently occurring.
-Next Steps: Ideally, we can quantify the effects of various policy levers. From there, we would automate a cost and benefit calculation using the quantified policy outcomes and home values. 
+ + Achieved: We have indicated the changes in home value that have been recently occurring.
+ + Next Steps: Ideally, we can quantify the effects of various policy levers. From there, we would automate a cost and benefit calculation using the quantified policy outcomes and home values. 
 
 We hope that other actors who are similarly concerned with homeowner displacement can continue to build upon both this model and dashboard tool. This kind of tool would be incredibly helpful to planners and policy makers attempting to stem what feels like an inevitable increase in displacement of long time residents in growing cities. Not only is this displacement not a given, but we currently have all the information needed to tackle the issue in a precise and data-driven way. 
 
