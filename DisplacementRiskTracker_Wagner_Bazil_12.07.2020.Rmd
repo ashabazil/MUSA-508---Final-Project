@@ -40,7 +40,7 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 mapTheme <- function(base_size = 12) {
   theme(
     text = element_text( color = "black", size=12),
-    plot.title = element_text(size = 13,colour = "black"),
+    plot.title = element_text(size = 12,colour = "black"),
     plot.subtitle=element_text(face="italic"),
     plot.caption=element_text(hjust=0),
     axis.ticks = element_blank(),
@@ -56,7 +56,7 @@ mapTheme <- function(base_size = 12) {
 plotTheme <- function(base_size = 12) {
   theme(
     text = element_text( color = "black", size=12),
-    plot.title = element_text(size = 14,colour = "black"),
+    plot.title = element_text(size = 12,colour = "black"),
     plot.subtitle = element_text(face="italic"),
     plot.caption = element_text(hjust=0),
     axis.ticks = element_blank(),
@@ -207,7 +207,6 @@ st_transform(st_crs(fishnet))
 
 To further help us understand neighborhood changes that may lead to displacement risk, we gather data from the Department of Records on [Real Estate Transfers](https://www.opendataphilly.org/dataset/real-estate-transfers). The real estate transfers data shows the dates and location of property sales, deeds, mortgages, and sheriff deeds, and includes associated data, such as any realty transfer tax paid. We gathered data for 2017 and 2018, and calculated the percent change in home value in order to categorize each observation as "No Change", "Increase in Home Value", "Decrease in Home Value", or "No Answer." Because we are focused on changes in home value (and resulting increases in property taxes) as a primary mechanism for driving displacement, we wish to understand the patterns of changes in home values across the city.
 
-In the figure below, we see locations with the greatest density of changes in home value. These locations are concentrated in the Center City area. 
 
 ```{r real estate value, message=FALSE, warning=FALSE}
 
@@ -258,50 +257,9 @@ increasedHV <-
   joined %>% 
   filter(dif_cat == "Increase in Home Value")
 
-ggplot() + 
-  geom_sf(data = boundary, fill = "grey40") +
-  stat_density2d(data = data.frame(st_coordinates(joined)), 
-                 aes(X, Y, fill = ..level.., alpha = ..level..),
-                 size = 0.02, bins = 50, geom = 'polygon') +
-  scale_fill_viridis() +
-  scale_alpha(range = c(0.00, 0.50), guide = FALSE) +
-  labs(title = "Home Value Difference") +
-  theme(legend.position = "none")+
-  mapTheme()
 ```
 
-
-The figures below depict the increases and decreases in home value between 2017 and 2018 by percentage difference. Locations with greatest increases are generally clustered in the Center City area and locations directly to the north. Locations with greatest decrease are more widely scattered across the city. 
-
-```{r home value exploratory plots, message=FALSE, warning=FALSE}
-# plot magnitude of percentage increases and decreases
-#flip color scale for decrease, filter out small decrease differences
-
-grid.arrange(ncol=2,
-  ggplot()+
-    geom_sf(data = nhood, fill = "grey40") +
-    geom_sf(data=increasedHV, aes(color=q5(dif_pct)),
-            show.legend="point", size=1)+
-    scale_color_viridis(discrete = TRUE,
-                        labels=qBr(increasedHV, "dif_pct"),
-                        name="Quintile\nBreaks")+
-    labs(title="Home Value increases\nbetween 2017 and 2018\nby Percentage Difference")+
-    mapTheme(),
-  
-    ggplot()+
-    geom_sf(data = nhood, fill = "grey40") +
-    geom_sf(data=decreasedHV, aes(color=q5(dif_pct)),
-            show.legend="point", size=1)+
-    scale_color_viridis(discrete = TRUE,
-                        labels=qBr(decreasedHV, "dif_pct"),
-                        name="Quintile\nBreaks")+
-    labs(title="Abs Val of Home Value decreases\nbetween 2017 and 2018\nby Percentage Difference")+
-    mapTheme())
-  
-```  
-
-
-To further understand changes in home value, the figures below show the distribution of home values across the city in 2018 and 2018. The pattern remains largely the same across the city.
+To understand changes in home value, the figures below show the distribution of home values across the city in 2017 and 2018. We see an increase in high value homes (above 1 million) in the area northwest of Center City near Fishtown and Northern Liberties. 
 
 ```{r home values plot, message=FALSE, warning=FALSE}
 #plot of just property values
@@ -330,6 +288,36 @@ ggplot()+
     labs(title="Property Values")+
     mapTheme()
 
+```  
+
+
+The figures below depict the increases and decreases in home value between 2017 and 2018 by percentage difference. Locations with greatest increases are generally clustered in the Center City area and locations directly to the north. Locations seeing a decrease in values are more widely scattered across the city, and the percentage difference in magnitudes are substantially smaller than the increased percent difference.
+
+```{r home value exploratory plots, message=FALSE, warning=FALSE}
+# plot magnitude of percentage increases and decreases
+#flip color scale for decrease, filter out small decrease differences
+
+grid.arrange(ncol=2,
+  ggplot()+
+    geom_sf(data = nhood, fill = "grey40") +
+    geom_sf(data=increasedHV, aes(color=q5(dif_pct)),
+            show.legend="point", size=1)+
+    scale_color_viridis(discrete = TRUE,
+                        labels=qBr(increasedHV, "dif_pct"),
+                        name="Quintile\nBreaks")+
+    labs(title="Home Value increases\nbetween 2017 and 2018\nby Percentage Difference")+
+    mapTheme(),
+  
+    ggplot()+
+    geom_sf(data = nhood, fill = "grey40") +
+    geom_sf(data=decreasedHV, aes(color=q5(dif_pct)),
+            show.legend="point", size=1)+
+    scale_color_viridis(discrete = TRUE,
+                        labels=qBr(decreasedHV, "dif_pct"),
+                        name="Quintile\nBreaks")+
+    labs(title="Abs Val of Home Value decreases\nbetween 2017 and 2018\nby Percentage Difference")+
+    mapTheme())
+  
 ```  
 
 
