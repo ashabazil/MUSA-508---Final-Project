@@ -79,7 +79,7 @@ plotTheme <- function(base_size = 12) {
 palette5 <- c("#25CB10", "#5AB60C", "#8FA108",   "#C48C04", "#FA7800")
 ```
 
-## Intro
+## Introduction
 
 This analysis aims to create a tool that can be used by city housing departments across the United States as a means of predicting and preventing potential residential displacement. We pilot this idea with the Philadelphia Division of Housing and Community Development in mind, in an effort to help the division allocate limited housing resources to vulnerable residents. 
 
@@ -102,13 +102,13 @@ Because homeowners are often rightly skeptical of communications regarding their
 Underlying our Displacement Tracker Tool is a model that uses a variety of data to predict the count of residential building permits across the city. The Tool also incorporates data on potential outreach partners, who are trusted organizations within communities. Most data area gathered from [OpenDataPhilly](https://www.opendataphilly.org/), the City of Philadelphia's catalog of available data in the Philadelphia region. We also use data from the U.S. Census Bureau's 2018 5-year [American Community Survey](https://www.census.gov/programs-surveys/acs) to understand information about the population such as education level and median income. The sections below describe our process for gathering and cleaning various datasets.
 
 
-### Base data
+### Base Data
 
 To begin, we gather Philadelphia new construction permit data from 2015 through 2019 from the [Licenses and Inspections Building and Zoning Permit Dataset](https://www.opendataphilly.org/dataset/licenses-and-inspections-building-permits). These data from the Department of Licenses & Inspections provide the date, location, and a variety of ancillary information about building permits in the city. Building permits are required before the start of a specific construction activity to enlarge, repair, change, add or, or demolish a structure, and to install equipment or systems in a structure. From this dataset, we've selected only new construction  permits, as we believe that new construction is a strong primary indicator of displacement risk for longtime residents. Areas with large amounts of new construction permits may indicate an early warning sign for neighborhood changes that can increase the risk of longtime resident displacement. As renovation and construction occurs on a high density of residential properties, neighborhoods can become more expensive, experience higher real estate taxes that may burden lower income residents, and/or experience cultural shifts that may make longtime residents feel they no longer belong.^[Pew Charitable Trusts. 2016. Philadelphia's Changing Neighborhoods: Gentrificaiton and other shifts since 2000. https://www.pewtrusts.org/~/media/assets/2016/05/philadelphias_changing_neighborhoods.pdf].
 
 Importantly, we also gather data on locations and contact information for Philadelphia [Registered Community Organizations](https://www.phila.gov/programs/registered-community-organizations-rcos/) (RCOs), which are community groups that are concerned with the physical development of their community. RCOs get advance notice of projects that will be reviewed by the Zoning Board of Adjustment or the Civic Design Review Committee; organize and conduct public meetings where community members can comment on planned developments in their neighborhood; and get notifications from the Philadelphia City Planning Commission whenever a zoning variance or special exception is requested or when development requiring Civic Design Review is proposed. We use this RCO data to identify potential trusted community partners within each neighborhood that may be able to communicate effectively with local residents based on established trust.
 
-```{r read in base data, message=FALSE, warning=FALSE}
+```{r read in base data, message=FALSE, warning=FALSE, results='hide'}
 #residential building permit
 
 permits <- 
@@ -134,10 +134,7 @@ st_transform('ESRI:102729')
 
 ```
 
-
-Next, we create a geospatial dataset to help us understand the smooth variation of displacement risk across the city. This key element of our analysis is the "fishnet," a continuous grid pattern overlay in which every polygon is connected on all sides to the other polygon neighbors. This analysis uses a fishnet with 500x500 foot grid cells. We use a fishnet to treat displacement risk (presence of new construction permits) as a phenomenon that varies continuously across space. We will use the fishnet to aggregate point-level data.
-
-The figure below shows the count of new construction permits across the fishnet. Grid cells shown in yellow have the largest number of permits. These locations are primarily concentrated in the Center City and North East Philadelphia areas.
+The figures below show permit location and density. Permits are most dense in the center city area.
 
 ```{r fishnet, message=FALSE, warning=FALSE}
 
@@ -148,7 +145,7 @@ grid.arrange(ncol=2,
 ggplot() + 
   geom_sf(data = boundary) +
   geom_sf(data = permits, colour="red", size=0.1, show.legend = "point") +
-  labs(title= "Permits, Phil - 2010-2020")+
+  labs(title= "Permits, Philadelpahia 2015-2019")+
   mapTheme(),
 ggplot() + 
   geom_sf(data = boundary, fill = "grey40") +
@@ -179,6 +176,13 @@ permit_net <-
          cvID = sample(round(nrow(fishnet) / 24), 
                        size=nrow(fishnet), replace = TRUE)) #adding a random number to each grid cell for cross validation later
 
+```
+
+Next, we create a geospatial dataset to help us understand the smooth variation of displacement risk across the city. This key element of our analysis is the "fishnet," a continuous grid pattern overlay in which every polygon is connected on all sides to the other polygon neighbors. This analysis uses a fishnet with 500x500 foot grid cells. We use a fishnet to treat displacement risk (presence of new construction permits) as a phenomenon that varies continuously across space. We will use the fishnet to aggregate point-level data.
+
+The figure below shows the count of new construction permits across the fishnet. Grid cells shown in yellow have the largest number of permits. These locations are primarily concentrated in the Center City and North East Philadelphia areas.
+
+```{r fishnet plot, message=FALSE, warning=FALSE}
 ggplot() +
   geom_sf(data = permit_net, aes(fill = countpermits), color = NA) +
   scale_fill_viridis() +
@@ -190,7 +194,7 @@ ggplot() +
 
 Next we gather data on the boundaries of Philadelphia's neighborhoods. We will use neighborhood's as a unit of analysis for both cross-validation of the predictive model and to understand locations of greatest risk. 
 
-```{r nhood data, message=FALSE, warning=FALSE}
+```{r nhood data, message=FALSE, warning=FALSE, results='hide'}
 #nhood <- st_read("/Users/ashabazil/Documents/GitHub/geo-data/Neighborhoods_Philadelphia/Neighborhoods_Philadelphia.geojson") %>%
 #st_transform(st_crs(fishnet)) 
 
@@ -208,7 +212,7 @@ st_transform(st_crs(fishnet))
 To further help us understand neighborhood changes that may lead to displacement risk, we gather data from the Department of Records on [Real Estate Transfers](https://www.opendataphilly.org/dataset/real-estate-transfers). The real estate transfers data shows the dates and location of property sales, deeds, mortgages, and sheriff deeds, and includes associated data, such as any realty transfer tax paid. We gathered data for 2017 and 2018, and calculated the percent change in home value in order to categorize each observation as "No Change", "Increase in Home Value", "Decrease in Home Value", or "No Answer." Because we are focused on changes in home value (and resulting increases in property taxes) as a primary mechanism for driving displacement, we wish to understand the patterns of changes in home values across the city.
 
 
-```{r real estate value, message=FALSE, warning=FALSE}
+```{r real estate value, message=FALSE, warning=FALSE, results='hide'}
 
 #real estate transfer data
 #this takes a while
@@ -306,7 +310,7 @@ grid.arrange(ncol=2,
                         labels=qBr(increasedHV, "dif_pct"),
                         name="Quintile\nBreaks")+
     labs(title="Home Value increases\nbetween 2017 and 2018\nby Percentage Difference")+
-    mapTheme(),
+    mapTheme()+theme(plot.title = element_text(size = 10)),
   
     ggplot()+
     geom_sf(data = nhood, fill = "grey40") +
@@ -315,15 +319,15 @@ grid.arrange(ncol=2,
     scale_color_viridis(discrete = TRUE,
                         labels=qBr(decreasedHV, "dif_pct"),
                         name="Quintile\nBreaks")+
-    labs(title="Abs Val of Home Value decreases\nbetween 2017 and 2018\nby Percentage Difference")+
-    mapTheme())
+    labs(title="Absolute Value of Home Value \ndecreases between 2017 and 2018\nby Percentage Difference")+
+    mapTheme()+theme(plot.title = element_text(size = 10)))
   
 ```  
 
 
 The figures below show the density of locations where home values increased and decreased between 2017 and 2018. Both of these locations are concentrated in the Center City area, with a greater intensity of home value increases in that location.
 
-```{r home value density, message=FALSE, warning=FALSE}
+```{r home value density, fig.width=6, fig.height=4, message=FALSE, warning=FALSE}
 #denisty of homevalues in 2017 and 2018
 #does this show density of greatest home values? or density of where there are home values? We have a lot of plots here so not sure if we need these - let me know what you think!
 
@@ -370,7 +374,7 @@ ggplot() +
                  size = 0.02, bins = 50, geom = 'polygon') +
   scale_fill_viridis() +
   scale_alpha(range = c(0.00, 0.50), guide = FALSE) +
-  labs(title = "Locations where Home Values Increased, 2017-2018") +
+  labs(title = "Locations where Home Values \nIncreased, 2017-2018") +
   theme(legend.position = "none")+
   mapTheme(),
 
@@ -381,7 +385,7 @@ ggplot() +
                  size = 0.01, bins = 40, geom = 'polygon') +
   scale_fill_viridis() +
   scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
-  labs(title = "Locations where Home Values Decreased, 2017-2018") +
+  labs(title = "Locations where Home Values \nDecreased, 2017-2018") +
   theme(legend.position = "none")+
   mapTheme())
 ```
@@ -395,7 +399,7 @@ We also gathered data on [311 Service and Information Requests](https://www.open
 
 The figures below show the density of locations of these reports and violations, which are distributed across the city. 
 
-```{r 311 data, message=FALSE, warning=FALSE}
+```{r 311 data, message=FALSE, warning=FALSE, results='hide'}
 #https://cityofphiladelphia.github.io/carto-api-explorer/#public_cases_fc
 
 # Sanitation Data
@@ -430,7 +434,9 @@ vacant<-
     st_transform(st_crs(fishnet)) %>%
     mutate(Legend = "Vacant")
 
+```
 
+```{r 311 plots, message=FALSE, warning=FALSE}
 grid.arrange(ncol = 3,
   ggplot() + geom_sf(data = boundary, fill = "grey40") +
       stat_density2d(data = data.frame(st_coordinates(sanitation)), 
@@ -438,7 +444,7 @@ grid.arrange(ncol = 3,
                  size = 0.01, bins = 40, geom = 'polygon') +
       scale_fill_gradient(low = "#25CB10", high = "#FA7800", name = "Density") +
       scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
-      labs(title = "Density of Sanitation Violations") +
+      labs(title = "Density of \nSanitation Violations") +
       mapTheme()+
       theme(legend.position = "none"),
   ggplot() + geom_sf(data = boundary, fill = "grey40") +
@@ -447,7 +453,7 @@ grid.arrange(ncol = 3,
                  size = 0.01, bins = 40, geom = 'polygon') +
       scale_fill_gradient(low = "#25CB10", high = "#FA7800", name = "Density") +
       scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
-      labs(title = "Density of Dangerous Building Reports") +
+      labs(title = "Density of \nDangerous Building Reports") +
       mapTheme()+
       theme(legend.position = "none"),
   ggplot() + geom_sf(data = boundary, fill = "grey40") +
@@ -456,7 +462,7 @@ grid.arrange(ncol = 3,
                  size = 0.01, bins = 40, geom = 'polygon') +
       scale_fill_gradient(low = "#25CB10", high = "#FA7800", name = "Density") +
       scale_alpha(range = c(0.00, 0.35), guide = FALSE) +
-      labs(title = "Density of Vacant Lots") +
+      labs(title = "Density of \nVacant Lots") +
       mapTheme()+
       theme(legend.position = "none"))
 
@@ -466,26 +472,26 @@ grid.arrange(ncol = 3,
 Finally, we gathered data from the U.S. Census Bureau 2018 5-year American Community Survey (ACS) at the census tract level on median household income, education level, and moving dates. We used these data to calculate the following variables for inclusion in the predictive model:
 
 * Percent of Voting Age Population with the following Education levels:
- + No High School Degree
- + High School Degree
- + Some College Education
- + Associate's Degree
- + Bachelor's Degree
- + Graduate or Professional Degree
+    + No High School Degree
+    + High School Degree
+    + Some College Education
+    + Associate's Degree
+    + Bachelor's Degree
+    + Graduate or Professional Degree
 * Percent of Residents in Owner-Occupied Housing
 * Percent of Residents in Renter-Occupied Housing
 * Percent of Residents who Moved into Owner-Occupied Housing:
- + Before 2010
- + 2010 to 2014
- + 2015 to 2018
+    + Before 2010
+    + 2010 to 2014
+    + 2015 to 2018
 * Percent of Residents who Moved into Renter-Occupied Housing:
- + Before 2010
- + 2010 to 2014
- + 2015 to 2018
+    + Before 2010
+    + 2010 to 2014
+    + 2015 to 2018
 
 As described in further detail below, we used a selection of these variables within our predictive model as indicators of residential building permit locations.
 
-```{r ACS Data, message=FALSE, warning=FALSE}
+```{r ACS Data, message=FALSE, warning=FALSE, results='hide'}
 census_api_key("337be6633f769979b1dfc56e5071279d780c2090", overwrite = TRUE)
 
 dd18_5 <- load_variables(year = 2018, dataset = "acs5", cache = TRUE)
@@ -564,14 +570,14 @@ ACS_2018 <- get_acs(geography = "tract",
 
 The figures below show the distribution of residents in owner-occupied housing who moved in before 2010 (left), and between 2015 and 2018 (right). From these maps we can see that some locations have a greater percentage of new homeowners (yellow areas on the map at right), including the Point Breeze and Northern Liberties Neighborhoods.
 
-```{r ACS Plots, message=FALSE, warning=FALSE}
+```{r ACS Plots, fig.height=10, message=FALSE, warning=FALSE}
 ACS_2018_plot<-
   ACS_2018%>%
   mutate(percent_Own_Pre2010_per=percent_Own_Pre2010*100)%>%
   mutate(percent_Own_2015to2018_per=percent_Own_2015to2018*100)%>%
   mutate(percent_Rent_2015to2018_per=percent_Rent_2015to2018*100)
 
-grid.arrange(ncol=2,
+grid.arrange(nrow=2, 
 ggplot()+
   geom_sf(data=ACS_2018_plot, aes(fill=q5(percent_Own_Pre2010_per)))+
   scale_fill_viridis(discrete = TRUE,
@@ -583,9 +589,10 @@ ggplot()+
   geom_sf(data=ACS_2018_plot, aes(fill=q5(percent_Own_2015to2018_per)))+
   scale_fill_viridis(discrete = TRUE,
                     labels = qBr(ACS_2018_plot, "percent_Own_2015to2018_per"),
-                    name = "Quintile Breaks") +
+                    name = "Owned 2015-2018\nQuintile Breaks") +
   labs(title = "Percentage of Residents in Owner-Occupied Housing: \nMoved in Between 2015 and 2018") +
-  mapTheme())
+  mapTheme()
+)
   
 ```
 
@@ -622,7 +629,7 @@ vars_net<-
 ```
 
 
-## Spatial processes
+## Spatial Processes
 
 As we attempt to predict construction permits across space, it is important to account for the spatial process involved in the clustering of construction permits. In this section we will explain the features we create as a means of accounting for spatial clustering.
 
@@ -671,7 +678,7 @@ vars_net <-
 
 ```
 
-### Creating Distance to Center City as a variable
+### Creating Distance to Center City as a Variable
 
 We next calculate the distance to downtown Philadelphia (Center City) and add the risk factor to the fishnet. We believe this serves to reflect the effect of proximity to the central business and growth hub of the city. 
 
@@ -689,73 +696,73 @@ vars_net$ccDistance =
 ### Variable Plots
 The figures below depict a selection of risk factors mapped to the fishnet. The variety of spatial distributions across these maps indicate that the risk factors illustrate different spatial processes. For example, locations with high concentrations of residents with a Bachelor's degree are concentrated in the Center City and Northwest Philadelphia areas, while distance to the nearest three sanitation violations are distributed roughly evenly across the city. 
 
-```{r feature plots, message=FALSE, warning=FALSE,}
-grid.arrange(ncol=3,
+```{r feature plots, fig.width=6, fig.height=14, message=FALSE, warning=FALSE,}
+grid.arrange(ncol=2,
   ggplot()+
     geom_sf(data=vars_net, aes(color=Median_HHInc))+
     scale_color_viridis()+
     labs(title="Median Household Income")+
-    mapTheme(),
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=percent_HS))+
     scale_color_viridis()+
-    labs(title="Percent of Voting-Age Population \nwithout a High School Degree")+
-    mapTheme(),
+    labs(title="Voting-Age Pop % No High School")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=percent_bach))+
     scale_color_viridis()+
-    labs(title="Percent of Voting-Age Population \nwith a Bachelors Degree")+
-    mapTheme(),
+    labs(title="Voting-Age Pop % Bachelors")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=percent_ownOcc))+
     scale_color_viridis()+
-    labs(title="Percent of the Population Living \nin Owner-Occupied Housing")+
-    mapTheme(),
+    labs(title="Pop % in Owner-Occ Housing")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=percent_Own_Pre2010))+
     scale_color_viridis()+
-    labs(title="Percent of the Population Living in \nOwner-Occupied Housing: Moved in Before 2010")+
-    mapTheme(),
+    labs(title="Pop % in Owner-Occ \nSince Pre-2010")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=percent_Own_2015to2018))+
     scale_color_viridis()+
-    labs(title="Percent of the Population Living in \nOwner-Occupied Housing: Moved in Between 2015-2018")+
-    mapTheme(),
+    labs(title="Pop % in Owner-Occ \nSince 2015-2018")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=percent_Rent_Pre2010))+
     scale_color_viridis()+
-    labs(title="Percent of the Population Living in \nRenter-Occupied Housing: Moved in Before 2010")+
-    mapTheme(),
+    labs(title="Pop % in Renter-Occ \nSince Pre-2010")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=percent_Own_2015to2018))+
     scale_color_viridis()+
-    labs(title="Percent of the Population Living in \nRenter-Occupied Housing: Moved in Between 2015-2018")+
-    mapTheme(),
+    labs(title="Pop % in Renter-Occ \nSince 2015-2018")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=Sanitation.nn))+
     scale_color_viridis()+
-    labs(title="Distance to Nearest 3 Saniation Violations")+
-    mapTheme(),
+    labs(title="Distance to Nearest 3 \nSaniation Violations")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=Service.nn))+
     scale_color_viridis()+
-    labs(title="Distance to Nearest 3 Service Requests")+
-    mapTheme(),
+    labs(title="Distance to Nearest 3 \nService Requests")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=Vacant.nn))+
     scale_color_viridis()+
-    labs(title="Distance to Nearest 3 Vacant Lots")+
-    mapTheme(),
+    labs(title="Distance to Nearest 3 \nVacant Lots")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()),
   ggplot()+
     geom_sf(data=vars_net, aes(color=ccDistance))+
     scale_color_viridis()+
-    labs(title="Distance to Center City")+
-    mapTheme())
+    labs(title="Distance to \nCenter City")+
+    mapTheme()+theme(plot.title = element_text(size = 10), legend.title=element_blank()))
             
 ```
 
 
-### Create final net
+### Create Final Net
 Finally, we perform a join to combine the permit data with the risk factor data and join neighborhoods to the final net. 
 
 ```{r doing spatial join, message=FALSE, warning=FALSE, include=TRUE}
@@ -788,7 +795,7 @@ final_net <-
 
 We use a geospatial risk model where the dependent variable is new construction permits. We work to predict the risk of new construction permits in particular areas of the city.  
 
-### Plots of Local Moran's I for fishnet grid cells
+### Plots of Local Moran's I for Fishnet Grid Cells
 
 The success of our model is dependent on its ability to account for spatial clustering at multiple scales. Here we use Local Moran's I to explore the local spatial process. The null hypothesis is that the count of new construction permits is randomly distributed relative to its immediate neighbors. 
 
@@ -806,7 +813,7 @@ The inputs of the Local Moran test are the count of new construction permits and
 
 With the Local Moran's I test, we reject the null hypothesis that the permit count at a given location is randomly distributed relative to it's immediate neighbors. That is, we can test for (and control for) the spatial autocorrelation of the model errors at the local level.
 
-```{r local Morans I, message=FALSE, warning=FALSE, include=TRUE}
+```{r local Morans I, fig.height=4, message=FALSE, warning=FALSE, include=TRUE}
 final_net.localMorans <- 
   cbind(
     as.data.frame(localmoran(final_net$countpermits, final_net.weights)),
@@ -833,7 +840,7 @@ for(i in vars){
 do.call(grid.arrange,c(varList, ncol = 4, top = "Local Morans I statistics, Permit"))
 ```
 
-### Distance to Hot spot
+### Distance to Hot Spots
 
 We use this hotspot information to create a spatial feature as a means for controlling for this local spatial autocorrelation. Here we calculate the distance of each grid cell to the nearest significant hotspot as a variable "Distance to Hotspot". 
 
@@ -866,7 +873,7 @@ ggplot() +
 ## What does k = 1 represent? the distance to my closest significant hot spot. Want the biggest number when we're close to a hot spot. Exposure to closest one.  Can we plot this?
 ```
 
-### Correlation Plot
+### Correlation Plots
 
 From the correlation plot of our numerical variables, we see that this new Distnace to Hotspot variable is negatively correlated with the count of new construction permits. That is, as the distance to a significant hotspot increases, the count of permits decreases. 
 
@@ -973,7 +980,7 @@ for (i in cvID_list) {
 
 ```
 
-## Cross validation methods
+## Cross Validation Methods
 
 We cross validate four different regressions. Two perform random k-fold cross validation - one using the simple risk factors and one adding the distance to significant hotspots variable. Two others perform LOGO-CV based on the neighborhood name - again, one using the simple risk factors and one adding the distance to significant hotspots variable.
 
@@ -1075,7 +1082,7 @@ st_drop_geometry(error_by_reg_and_fold) %>%
     row_spec(2, color = "black", background = "#FDE725FF") %>%
     row_spec(4, color = "black", background = "#FDE725FF") 
 
-mean(final_net$countpermits)
+#mean(final_net$countpermits)
 ```
 
 These results are further visualized by examining the MEA by decile of permit counts. The use of the hotspot variable greatly reduced the error in the areas with the highest density of permits.
@@ -1100,11 +1107,9 @@ st_drop_geometry(reg.summary) %>%
 
 ### Racial Generalizability
 
-WE CAN TAKE THIS OUT MAYBE, THE SPATIAL PROCESS DOESN'T REDUCE ERRORS AT ALL BETWEEN RACE. COULD BE A DISCUSSION ABOUT HOW AREAS WITH HIGHER NON WHITE POPULATIONS ARE SEEING HIGHER PERMIT COUNTS AND DISPLACEMENT?
-
 Another important level of generalizability is across social dimensions such as race and income. Below we see a map of the racial context of Philadelphia looking at the distinction between majority white and non white census tracts. 
 
-```{r race map, message=FALSE, warning=FALSE, include=TRUE}
+```{r race map, message=FALSE, warning=FALSE, results='hide'}
 
 tracts18 <- 
   get_acs(geography = "tract", variables = c("B01001_001E","B01001A_001E"), 
@@ -1117,14 +1122,15 @@ tracts18 <-
   mutate(percentWhite = NumberWhites / TotalPop,
          raceContext = ifelse(percentWhite > .5, "Majority_White", "Majority_Non_White")) %>%
   .[nhood,]
+```
 
+```{r map, message=FALSE, warning=FALSE, include=TRUE}
  
    ggplot()+
     geom_sf(data=tracts18, aes(fill=raceContext))+
     #scale_color_viridis()+
     labs(title="Race Context in Philadelphia\n2018")+
     mapTheme()
-
 
 ```
 
@@ -1223,6 +1229,7 @@ The bar chart below displays the top five neighborhoods at risk of new construct
   labs(x = "Neighborhood",
        title = "Neighborhoods with Predicted Permit Risk greater than 99%") +
   #scale_y_continuous(limits = c(0,100)) +
+    theme(axis.text.x=element_text(angle = 60, vjust=0.5))+
   plotTheme()
 
 
@@ -1234,7 +1241,7 @@ The bar chart below displays the top five neighborhoods at risk of new construct
 
 As part of our analysis, we collected data on Registered Community Organizations (RCOs) in Philadelphia, including the RCO boundaries and primary contact information. We have matched the RCOs with Philadelphia neighborhoods and provided a table of each RCO that makes the contact information readily available. We intend this information to complement the results from our predictive analysis: as neighborhoods are identified as at risk to displacement, staff from the City may wish to contact trusted organizations in that location in order to begin a process to support longtime residents.
 
-```{r join RCOs to neighborhoods, message=FALSE, warning=FALSE, include=TRUE}
+```{r join RCOs to neighborhoods, message=FALSE, warning=FALSE, include=TRUE, results='hide'}
 nhood_name<- nhood%>% dplyr::select(name)%>%
   rename(Neighborhood=name)
   
@@ -1246,31 +1253,35 @@ rcos_final<-
 
 rcos_final<-rcos_final[c(7, 1, 2, 3, 4, 5, 6, 8)]
 
+```
+
+```{r RCO table, message=FALSE, warning=FALSE, include=TRUE}
+
 st_drop_geometry(rcos_final) %>%
   kable(caption = "Registered Community Organizations by Neighborhood")%>%
-    kable_styling("striped", full_width = F)%>%
+    kable_styling("striped", full_width = T)%>%
   scroll_box(height = "300px")
 ```
 
 
-## Use case and Improvements 
+## Use Case & Improvements 
 
 Returning to our original use case, this analysis and model has successfully laid the foundation for achieving our vision of a Displacemnet Risk Tracking tool to be used by city governments. 
 
-* 1 Anticipating neighborhoods where home values may increase
+1. Anticipating neighborhoods where home values may increase
 
- + Achieved: This model accurately predicts the risk of new construction across the city, and has identified neighborhoods at risk of experiencing displacement. Our exploratory analysis has also indicated areas with large recent changes in home values.
- + Next steps: We would like to incorporate the recent change in home value into our Risk Map at the neighborhood level.
+  * Achieved: This model accurately predicts the risk of new construction across the city, and has identified neighborhoods at risk of experiencing displacement. Our exploratory analysis has also indicated areas with large recent changes in home values.
+  * Next steps: We would like to incorporate the recent change in home value into our Risk Map at the neighborhood level.
 
-* 2 Identifying trusted community partners in each area of the city
+2. Identifying trusted community partners in each area of the city
 
- + Achieved: A list of RCOs is joined into our neighborhood list.
- + Next Steps: We would like to create an interactive risk map that displays these partners upon clicking on a neighborhood on the map. 
+  * Achieved: A list of RCOs is joined into our neighborhood list.
+  * Next Steps: We would like to create an interactive risk map that displays these partners upon clicking on a neighborhood on the map. 
 
-* 3 By estimating the benefit various policy levers, such as flip taxes or home renovation subsidies, can have on the long-time residents of each neighborhood.
+3. By estimating the benefit various policy levers, such as flip taxes or home renovation subsidies, can have on the long-time residents of each neighborhood.
 
- + Achieved: We have indicated the changes in home value that have been recently occurring.
- + Next Steps: Ideally, we can quantify the effects of various policy levers. From there, we would automate a cost and benefit calculation using the quantified policy outcomes and home values. 
+  * Achieved: We have indicated the changes in home value that have been recently occurring.
+  * Next Steps: Ideally, we can quantify the effects of various policy levers. From there, we would automate a cost and benefit calculation using the quantified policy outcomes and home values. 
 
 We hope that other actors who are similarly concerned with homeowner displacement can continue to build upon both this model and dashboard tool. This kind of tool would be incredibly helpful to planners and policy makers attempting to stem what feels like an inevitable increase in displacement of long time residents in growing cities. Not only is this displacement not a given, but we currently have all the information needed to tackle the issue in a precise and data-driven way. 
 
