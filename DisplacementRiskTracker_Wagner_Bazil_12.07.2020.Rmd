@@ -265,7 +265,7 @@ increasedHV <-
 
 To understand changes in home value, the figures below show the distribution of home values across the city in 2017 and 2018. We see an increase in high value homes (above 1 million) in the area northwest of Center City near Fishtown and Northern Liberties. 
 
-```{r home values plot, message=FALSE, warning=FALSE}
+```{r home values plot, fig.width=12, fig.height=6, message=FALSE, warning=FALSE}
 #plot of just property values
 rtt_plot<-
   rtt%>%
@@ -297,7 +297,7 @@ ggplot()+
 
 The figures below depict the increases and decreases in home value between 2017 and 2018 by percentage difference. Locations with greatest increases are generally clustered in the Center City area and locations directly to the north. Locations seeing a decrease in values are more widely scattered across the city, and the percentage difference in magnitudes are substantially smaller than the increased percent difference.
 
-```{r home value exploratory plots, message=FALSE, warning=FALSE}
+```{r home value exploratory plots, fig.width=12, fig.height=6, message=FALSE, warning=FALSE}
 # plot magnitude of percentage increases and decreases
 #flip color scale for decrease, filter out small decrease differences
 
