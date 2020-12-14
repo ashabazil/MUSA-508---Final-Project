@@ -96,6 +96,8 @@ This Displacement Tracker Tool works to prevent displacement in three key ways:
 
 Because homeowners are often rightly skeptical of communications regarding their property and its value, we strive to ensure that this information comes from an already proven and trusted source. This data-driven and community facilitated approach to displacement prevention is a new method for addressing the issue that many other cities and regions would benefit from implementing. We hope that this open-data analysis will serve as a basis for cities looking to rethink their response to displacement. 
 
+Please find a narrated presentation of our Displacement Tracking Tool [here](https://youtu.be/i3l2w5du1M4). 
+
 
 ## Data
 
